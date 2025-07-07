@@ -3,8 +3,8 @@ import stripe
 from flask import render_template, request, redirect, url_for, flash, session, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
 from app import app, db
-from models import User, TestPackage, Question, AnswerOption, UserPurchase, TestAttempt, UserAnswer, Test, TestQuestion
-from utils import import_questions_from_csv, process_text_with_images, create_tests_from_questions
+from models import User, TestPackage, Question, AnswerOption, UserPurchase, TestAttempt, UserAnswer
+from utils import import_questions_from_csv, process_text_with_images
 from datetime import datetime
 
 # Configure Stripe
@@ -94,7 +94,6 @@ def test_packages():
 @app.route('/package/<int:package_id>')
 def package_detail(package_id):
     package = TestPackage.query.get_or_404(package_id)
-    tests = Test.query.filter_by(test_package_id=package_id).order_by(Test.test_order).all()
     
     # Check if user has purchased this package
     has_purchased = False
@@ -105,7 +104,7 @@ def package_detail(package_id):
         ).first()
         has_purchased = purchase is not None
     
-    return render_template('package_detail.html', package=package, tests=tests, has_purchased=has_purchased)
+    return render_template('package_detail.html', package=package, has_purchased=has_purchased)
 
 @app.route('/create-checkout-session', methods=['POST'])
 @login_required
@@ -207,9 +206,9 @@ def payment_cancel():
     flash('Payment was cancelled.', 'info')
     return render_template('payment_cancel.html', package_id=package_id)
 
-@app.route('/take-test/<int:package_id>/<int:test_id>')
+@app.route('/take-test/<int:package_id>')
 @login_required
-def take_test(package_id, test_id):
+def take_test(package_id):
     # Check if user has purchased this package or is an admin
     purchase = UserPurchase.query.filter_by(
         user_id=current_user.id,
@@ -221,36 +220,15 @@ def take_test(package_id, test_id):
         return redirect(url_for('package_detail', package_id=package_id))
     
     package = TestPackage.query.get_or_404(package_id)
-    test = Test.query.get_or_404(test_id)
+    questions = Question.query.filter_by(test_package_id=package_id).all()
     
-    if test.test_package_id != package_id:
-        flash('Invalid test for this package.', 'error')
-        return redirect(url_for('package_detail', package_id=package_id))
-    
-    # Check if test is active
-    if not test.is_active:
-        flash('This test is currently not available.', 'warning')
-        return redirect(url_for('package_detail', package_id=package_id))
-    
-    # Get test questions
-    test_questions = db.session.query(TestQuestion, Question).join(
-        Question, TestQuestion.question_id == Question.id
-    ).filter(
-        TestQuestion.test_id == test_id
-    ).order_by(TestQuestion.question_order).all()
-    
-    if not test_questions:
-        # Check if there are questions in the package at all
-        package_questions = Question.query.filter_by(test_package_id=package_id).count()
-        if package_questions == 0:
-            flash('This package does not have any questions yet. Please contact support.', 'warning')
-        else:
-            flash('This test does not have any questions assigned yet. Tests may need to be regenerated.', 'warning')
-        return redirect(url_for('package_detail', package_id=package_id))
+    if not questions:
+        flash('This test package does not have any questions yet.', 'warning')
+        return redirect(url_for('dashboard'))
     
     # Convert questions to serializable format
     questions_data = []
-    for test_question, question in test_questions:
+    for question in questions:
         options_data = []
         for option in question.answer_options:
             options_data.append({
@@ -264,7 +242,7 @@ def take_test(package_id, test_id):
         
         questions_data.append({
             'id': question.id,
-            'text': process_text_with_images(question.question_text, package_id),
+            'text': process_text_with_images(question.question_text),
             'type': question.question_type,
             'domain': question.domain,
             'options': options_data
@@ -274,8 +252,7 @@ def take_test(package_id, test_id):
     test_attempt = TestAttempt(
         user_id=current_user.id,
         test_package_id=package_id,
-        test_id=test_id,
-        total_questions=len(test_questions)
+        total_questions=len(questions)
     )
     db.session.add(test_attempt)
     db.session.commit()
@@ -285,7 +262,6 @@ def take_test(package_id, test_id):
     
     return render_template('test_taking.html', 
                          package=package, 
-                         test=test,
                          questions=questions_data,
                          test_attempt=test_attempt)
 
@@ -389,10 +365,10 @@ def test_results(attempt_id):
         processed_question = Question(
             id=question.id,
             test_package_id=question.test_package_id,
-            question_text=process_text_with_images(question.question_text, question.test_package_id),
+            question_text=process_text_with_images(question.question_text),
             question_type=question.question_type,
             domain=question.domain,
-            overall_explanation=process_text_with_images(question.overall_explanation, question.test_package_id) if question.overall_explanation else ''
+            overall_explanation=process_text_with_images(question.overall_explanation) if question.overall_explanation else ''
         )
         
         # Process answer options for images
@@ -401,8 +377,8 @@ def test_results(attempt_id):
             processed_option = AnswerOption(
                 id=option.id,
                 question_id=option.question_id,
-                option_text=process_text_with_images(option.option_text, question.test_package_id),
-                explanation=process_text_with_images(option.explanation, question.test_package_id) if option.explanation else '',
+                option_text=process_text_with_images(option.option_text),
+                explanation=process_text_with_images(option.explanation) if option.explanation else '',
                 is_correct=option.is_correct,
                 option_order=option.option_order
             )
@@ -417,8 +393,8 @@ def test_results(attempt_id):
             processed_selected_option = AnswerOption(
                 id=selected_option.id,
                 question_id=selected_option.question_id,
-                option_text=process_text_with_images(selected_option.option_text, question.test_package_id),
-                explanation=process_text_with_images(selected_option.explanation, question.test_package_id) if selected_option.explanation else '',
+                option_text=process_text_with_images(selected_option.option_text),
+                explanation=process_text_with_images(selected_option.explanation) if selected_option.explanation else '',
                 is_correct=selected_option.is_correct,
                 option_order=selected_option.option_order
             )
@@ -456,12 +432,6 @@ def import_questions():
             try:
                 result = import_questions_from_csv(file, int(test_package_id))
                 flash(f'Successfully imported {result["imported"]} questions. Skipped {result["skipped"]} duplicates.', 'success')
-                
-                # Auto-create tests if questions were imported
-                if result["imported"] > 0:
-                    test_result = create_tests_from_questions(int(test_package_id))
-                    flash(f'Created {test_result["created"]} practice tests with {test_result["questions_per_test"]} questions each.', 'info')
-                    
             except Exception as e:
                 flash(f'Error importing questions: {str(e)}', 'error')
         else:
@@ -529,11 +499,11 @@ def edit_question(question_id):
             overall_explanation = request.form.get('overall_explanation', '')
             
             if question_text:
-                question.question_text = process_text_with_images(question_text, question.test_package_id)
+                question.question_text = process_text_with_images(question_text)
             if domain:
                 question.domain = domain
             if overall_explanation:
-                question.overall_explanation = process_text_with_images(overall_explanation, question.test_package_id)
+                question.overall_explanation = process_text_with_images(overall_explanation)
             
             # Update answer options
             for option in question.answer_options:
@@ -542,8 +512,8 @@ def edit_question(question_id):
                 option_correct = request.form.get(f'option_correct_{option.id}') == 'on'
                 
                 if option_text:
-                    option.option_text = process_text_with_images(option_text, question.test_package_id)
-                    option.explanation = process_text_with_images(option_explanation, question.test_package_id) if option_explanation else ''
+                    option.option_text = process_text_with_images(option_text)
+                    option.explanation = process_text_with_images(option_explanation) if option_explanation else ''
                     option.is_correct = option_correct
             
             db.session.commit()
@@ -569,10 +539,10 @@ def add_question(package_id):
     if request.method == 'POST':
         question = Question(
             test_package_id=package_id,
-            question_text=process_text_with_images(request.form.get('question_text'), package_id),
+            question_text=process_text_with_images(request.form.get('question_text')),
             question_type=request.form.get('question_type', 'multiple-choice'),
             domain=request.form.get('domain'),
-            overall_explanation=process_text_with_images(request.form.get('overall_explanation'), package_id)
+            overall_explanation=process_text_with_images(request.form.get('overall_explanation'))
         )
         db.session.add(question)
         db.session.flush()
@@ -587,8 +557,8 @@ def add_question(package_id):
             if option_text:
                 option = AnswerOption(
                     question_id=question.id,
-                    option_text=process_text_with_images(option_text, package_id),
-                    explanation=process_text_with_images(option_explanation, package_id) if option_explanation else '',
+                    option_text=process_text_with_images(option_text),
+                    explanation=process_text_with_images(option_explanation) if option_explanation else '',
                     is_correct=option_correct,
                     option_order=i
                 )
@@ -614,23 +584,6 @@ def delete_question(question_id):
     db.session.commit()
     
     flash('Question deleted successfully!', 'success')
-    return redirect(url_for('manage_questions', package_id=package_id))
-
-@app.route('/admin/create-tests/<int:package_id>', methods=['POST'])
-@login_required
-def create_tests(package_id):
-    if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    questions_per_test = request.form.get('questions_per_test', 50, type=int)
-    
-    try:
-        result = create_tests_from_questions(package_id, questions_per_test)
-        flash(f'Successfully created {result["created"]} tests with {result["questions_per_test"]} questions each.', 'success')
-    except Exception as e:
-        flash(f'Error creating tests: {str(e)}', 'error')
-    
     return redirect(url_for('manage_questions', package_id=package_id))
 
 @app.errorhandler(404)

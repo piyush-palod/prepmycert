@@ -48,7 +48,7 @@
                                 <div class="question-preview">
                                     {{ question.question_text|safe }}
                                 </div>
-
+                                
                                 <div class="mt-3">
                                     <small class="text-muted">Answer Options:</small>
                                     <ul class="list-unstyled mt-2">
@@ -118,49 +118,9 @@
 function confirmDelete(questionId) {
     const deleteForm = document.getElementById('deleteForm');
     deleteForm.action = `/admin/delete-question/${questionId}`;
-
+    
     const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
     modal.show();
 }
 </script>
 {% endblock %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-                <h3>Manage Questions - {{ package.title }}</h3>
-                <div class="btn-group">
-                    <a href="{{ url_for('add_question', package_id=package.id) }}" class="btn btn-primary">
-                        <i class="fas fa-plus me-2"></i>Add New Question
-                    </a>
-                    <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#createTestsModal">
-                        <i class="fas fa-list-alt me-2"></i>Create Tests
-                    </button>
-                </div>
-            </div>
-
-            <!-- Create Tests Modal -->
-            <div class="modal fade" id="createTestsModal" tabindex="-1">
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title">Create Practice Tests</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <form method="POST" action="{{ url_for('create_tests', package_id=package.id) }}">
-                            <div class="modal-body">
-                                <div class="mb-3">
-                                    <label for="questions_per_test" class="form-label">Questions per Test</label>
-                                    <input type="number" class="form-control" id="questions_per_test" name="questions_per_test" value="50" min="10" max="100" required>
-                                    <div class="form-text">Number of questions in each practice test (10-100)</div>
-                                </div>
-                                <div class="alert alert-info">
-                                    <i class="fas fa-info-circle me-2"></i>
-                                    This will create multiple practice tests from your question bank. Existing tests will be replaced.
-                                </div>
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                <button type="submit" class="btn btn-primary">Create Tests</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>

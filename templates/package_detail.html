@@ -11,7 +11,7 @@
                     <div class="package-domain">{{ package.domain }}</div>
                     <h1 class="card-title">{{ package.title }}</h1>
                     <p class="card-text lead">{{ package.description }}</p>
-
+                    
                     <div class="package-features mt-4">
                         <h5>What's Included:</h5>
                         <ul class="list-unstyled">
@@ -60,74 +60,28 @@
                 </div>
             </div>
         </div>
-
+        
         <div class="col-lg-4">
             <div class="card sticky-top">
                 <div class="card-body text-center">
                     <div class="package-price-large mb-3">${{ "%.2f"|format(package.price) }}</div>
                     <p class="text-muted mb-3">One-time payment • Lifetime access</p>
-
+                    
                     {% if current_user.is_authenticated %}
                         {% if has_purchased %}
                             <div class="alert alert-success">
                                 <i class="fas fa-check-circle me-2"></i>You own this package
                             </div>
-                            {% if tests %}
-                                <h5 class="mb-3">Available Practice Tests</h5>
-                                <div class="row">
-                                    {% for test in tests %}
-                                    <div class="col-md-6 mb-3">
-                                        <div class="card test-card">
-                                            <div class="card-body">
-                                                <h6 class="card-title">{{ test.title }}</h6>
-                                                <p class="card-text text-muted small">{{ test.description }}</p>
-                                                <div class="d-flex justify-content-between align-items-center">
-                                                    <small class="text-muted">{{ test.question_count }} questions</small>
-                                                    <a href="{{ url_for('take_test', package_id=package.id, test_id=test.id) }}" class="btn btn-success btn-sm">
-                                                        <i class="fas fa-play me-1"></i>Start Test
-                                                    </a>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                            {% else %}
-                                <div class="alert alert-warning">
-                                    <i class="fas fa-info-circle me-2"></i>
-                                    No practice tests are available yet. Please contact support.
-                                </div>
-                            {% endif %}
+                            <a href="{{ url_for('take_test', package_id=package.id) }}" class="btn btn-success btn-lg w-100 mb-3">
+                                <i class="fas fa-play me-2"></i>Take Test
+                            </a>
                         {% elif current_user.is_admin %}
                             <div class="alert alert-info">
                                 <i class="fas fa-user-shield me-2"></i>Admin Access
                             </div>
-                            {% if tests %}
-                                <h5 class="mb-3">Available Practice Tests</h5>
-                                <div class="row">
-                                    {% for test in tests %}
-                                    <div class="col-md-6 mb-3">
-                                        <div class="card test-card">
-                                            <div class="card-body">
-                                                <h6 class="card-title">{{ test.title }}</h6>
-                                                <p class="card-text text-muted small">{{ test.description }}</p>
-                                                <div class="d-flex justify-content-between align-items-center">
-                                                    <small class="text-muted">{{ test.question_count }} questions</small>
-                                                    <a href="{{ url_for('take_test', package_id=package.id, test_id=test.id) }}" class="btn btn-warning btn-sm">
-                                                        <i class="fas fa-play me-1"></i>Start Test (Admin)
-                                                    </a>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                            {% else %}
-                                <div class="alert alert-warning">
-                                    <i class="fas fa-info-circle me-2"></i>
-                                    No practice tests are available yet. Please contact support.
-                                </div>
-                            {% endif %}
+                            <a href="{{ url_for('take_test', package_id=package.id) }}" class="btn btn-warning btn-lg w-100 mb-3">
+                                <i class="fas fa-play me-2"></i>Take Test (Admin)
+                            </a>
                         {% else %}
                             <form method="POST" action="{{ url_for('create_checkout_session') }}">
                                 <input type="hidden" name="package_id" value="{{ package.id }}">
@@ -144,7 +98,7 @@
                             <i class="fas fa-sign-in-alt me-2"></i>Login to Purchase
                         </a>
                     {% endif %}
-
+                    
                     <div class="package-stats text-center">
                         <div class="row">
                             <div class="col">

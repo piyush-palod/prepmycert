@@ -1,40 +1,34 @@
-
 # Question Images
 
-This directory contains images used in test questions.
+This folder contains images used in questions and answer options.
 
-## Structure
+## How to Use Images in Questions
 
-### Package-Specific Images (Recommended)
-- `az-900/` - Images for Microsoft Azure Fundamentals
-- `dp-100/` - Images for Azure Data Scientist Associate
-- `sc-900/` - Images for Microsoft Security Fundamentals
-- etc.
+1. Upload your image files (PNG, JPG, JPEG, GIF, SVG) to this folder
+2. In your CSV file or when creating questions, reference images using this format:
+   ```
+   IMAGE: filename.png
+   ```
 
-**Note:** Folder names are automatically generated from package titles (lowercase, spaces/special chars converted to hyphens)
+## Example Usage
 
-### Legacy Images (Backward Compatibility)
-- Root directory - Images from before package-specific structure
+In a question text:
+```
+What does this diagram show? IMAGE: aws-architecture-diagram.png
+```
 
-## Usage in CSV
+In an answer option:
+```
+IMAGE: option-a-diagram.jpg This represents the correct architecture
+```
 
-Reference images in your CSV files using:
-- `IMAGE: filename.png`
-- `[IMAGE: filename.png]`
+## Supported Formats
+- PNG
+- JPG/JPEG  
+- GIF
+- SVG
 
-The system will automatically look for images in the appropriate package folder based on the test package being imported.
-
-## Image Guidelines
-
-1. Use descriptive filenames
-2. Supported formats: PNG, JPG, JPEG, GIF, SVG
-3. Keep file sizes reasonable for web display
-4. Images will be automatically resized to fit question containers
-
-## Folder Naming Convention
-
-Package titles are converted to folder names using these rules:
-- Convert to lowercase
-- Remove special characters (keep only letters, numbers, spaces, hyphens)
-- Replace spaces and multiple hyphens with single hyphens
-- Example: "Microsoft Azure Fundamentals AZ-900" → "microsoft-azure-fundamentals-az-900"
+## Notes
+- Images will be automatically resized to fit properly in the question interface
+- Make sure filenames match exactly (case-sensitive)
+- Use descriptive filenames for easier management
