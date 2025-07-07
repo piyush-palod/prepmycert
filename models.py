@@ -7,7 +7,7 @@ class User(UserMixin, db.Model):
     __tablename__ = 'users'
     
     id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(120), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(256), nullable=False)
     first_name = db.Column(db.String(50), nullable=False)
     last_name = db.Column(db.String(50), nullable=False)
@@ -53,10 +53,10 @@ class Question(db.Model):
     __tablename__ = 'questions'
     
     id = db.Column(db.Integer, primary_key=True)
-    test_package_id = db.Column(db.Integer, db.ForeignKey('test_packages.id'), nullable=False)
+    test_package_id = db.Column(db.Integer, db.ForeignKey('test_packages.id'), nullable=False, index=True)
     question_text = db.Column(db.Text, nullable=False)
     question_type = db.Column(db.String(50), nullable=False, default='multiple-choice')
-    domain = db.Column(db.String(100), nullable=False)
+    domain = db.Column(db.String(100), nullable=False, index=True)
     overall_explanation = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     

@@ -8,6 +8,13 @@ from models import User, TestPackage, Question, AnswerOption, UserPurchase, Test
 from utils import import_questions_from_csv, process_text_with_images
 from datetime import datetime
 
+import os
+import re
+import stripe
+from werkzeug.utils import secure_filename
+from flask import render_template, request, redirect, url_for, flash, session, jsonify
+
+
 # Configure Stripe
 stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
 
@@ -669,6 +676,43 @@ def toggle_admin(user_id):
     action = 'granted' if user.is_admin else 'removed'
     flash(f'Admin privileges {action} for {user.email}.', 'success')
     return redirect(url_for('admin_users'))
+
+@app.route('/admin/upload-image/<int:package_id>', methods=['POST'])
+@login_required
+def upload_image(package_id):
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    package = TestPackage.query.get_or_404(package_id)
+    
+    if 'image' not in request.files:
+        flash('No image file selected.', 'error')
+        return redirect(request.referrer)
+    
+    file = request.files['image']
+    if file.filename == '':
+        flash('No image file selected.', 'error')
+        return redirect(request.referrer)
+    
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        safe_package_name = re.sub(r'[^a-zA-Z0-9\-_]', '_', package.title.lower().replace(' ', '_'))
+        package_image_dir = os.path.join('static', 'images', 'questions', safe_package_name)
+        os.makedirs(package_image_dir, exist_ok=True)
+        
+        file_path = os.path.join(package_image_dir, filename)
+        file.save(file_path)
+        
+        flash(f'Image {filename} uploaded successfully!', 'success')
+    else:
+        flash('Invalid file type. Please upload PNG, JPG, JPEG, GIF, or SVG files.', 'error')
+    
+    return redirect(request.referrer)
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in {'png', 'jpg', 'jpeg', 'gif', 'svg'}
 
 @app.errorhandler(404)
 def not_found_error(error):

@@ -11,6 +11,11 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    
+    <!-- Stripe Configuration -->
+    <script>
+        window.STRIPE_PUBLISHABLE_KEY = '{{ config.get("STRIPE_PUBLISHABLE_KEY") or "pk_test_placeholder" }}';
+    </script>
 
     {% block head %}{% endblock %}
 </head>
