@@ -11,3 +11,15 @@ externalPort = 80
 
 [deployment]
 run = ["sh", "-c", "Run main.py"]
+
+[workflows]
+runButton = "Run Flask App"
+
+[[workflows.workflow]]
+name = "Run Flask App"
+author = 44694183
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python main.py"
