@@ -94,7 +94,7 @@ def test_packages():
 @app.route('/package/<int:package_id>')
 def package_detail(package_id):
     package = TestPackage.query.get_or_404(package_id)
-    tests = Test.query.filter_by(test_package_id=package_id, is_active=True).order_by(Test.test_order).all()
+    tests = Test.query.filter_by(test_package_id=package_id).order_by(Test.test_order).all()
     
     # Check if user has purchased this package
     has_purchased = False
