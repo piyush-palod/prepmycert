@@ -21,7 +21,16 @@ def process_text_with_images(text, package_id=None):
     def replace_image(match):
         image_filename = match.group(1)
         if package_id:
-            image_path = f"/static/images/questions/package_{package_id}/{image_filename}"
+            # Get package title for folder name
+            from models import TestPackage
+            package = TestPackage.query.get(package_id)
+            if package:
+                # Create a clean folder name from package title
+                folder_name = re.sub(r'[^\w\s-]', '', package.title.lower())
+                folder_name = re.sub(r'[-\s]+', '-', folder_name)
+                image_path = f"/static/images/questions/{folder_name}/{image_filename}"
+            else:
+                image_path = f"/static/images/questions/{image_filename}"
         else:
             # Fallback to old structure for backward compatibility
             image_path = f"/static/images/questions/{image_filename}"
