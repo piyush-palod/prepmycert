@@ -1,34 +1,29 @@
+
 # Question Images
 
-This folder contains images used in questions and answer options.
+This directory contains images used in test questions.
 
-## How to Use Images in Questions
+## Structure
 
-1. Upload your image files (PNG, JPG, JPEG, GIF, SVG) to this folder
-2. In your CSV file or when creating questions, reference images using this format:
-   ```
-   IMAGE: filename.png
-   ```
+### Package-Specific Images (Recommended)
+- `package_1/` - Images for test package 1
+- `package_2/` - Images for test package 2
+- etc.
 
-## Example Usage
+### Legacy Images (Backward Compatibility)
+- Root directory - Images from before package-specific structure
 
-In a question text:
-```
-What does this diagram show? IMAGE: aws-architecture-diagram.png
-```
+## Usage in CSV
 
-In an answer option:
-```
-IMAGE: option-a-diagram.jpg This represents the correct architecture
-```
+Reference images in your CSV files using:
+- `IMAGE: filename.png`
+- `[IMAGE: filename.png]`
 
-## Supported Formats
-- PNG
-- JPG/JPEG  
-- GIF
-- SVG
+The system will automatically look for images in the appropriate package folder based on the test package being imported.
 
-## Notes
-- Images will be automatically resized to fit properly in the question interface
-- Make sure filenames match exactly (case-sensitive)
-- Use descriptive filenames for easier management
+## Image Guidelines
+
+1. Use descriptive filenames
+2. Supported formats: PNG, JPG, JPEG, GIF, SVG
+3. Keep file sizes reasonable for web display
+4. Images will be automatically resized to fit question containers

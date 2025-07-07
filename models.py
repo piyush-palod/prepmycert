@@ -42,12 +42,44 @@ class TestPackage(db.Model):
     
     # Relationships
     questions = db.relationship('Question', backref='test_package', lazy=True)
+    tests = db.relationship('Test', backref='test_package', lazy=True)
     purchases = db.relationship('UserPurchase', backref='test_package', lazy=True)
     test_attempts = db.relationship('TestAttempt', backref='test_package', lazy=True)
     
     @property
     def question_count(self):
         return len(self.questions)
+
+class Test(db.Model):
+    __tablename__ = 'tests'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    test_package_id = db.Column(db.Integer, db.ForeignKey('test_packages.id'), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    test_order = db.Column(db.Integer, nullable=False, default=1)
+    questions_per_test = db.Column(db.Integer, nullable=False, default=50)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    test_questions = db.relationship('TestQuestion', backref='test', lazy=True, cascade='all, delete-orphan')
+    test_attempts = db.relationship('TestAttempt', backref='test', lazy=True)
+    
+    @property
+    def question_count(self):
+        return len(self.test_questions)
+
+class TestQuestion(db.Model):
+    __tablename__ = 'test_questions'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    test_id = db.Column(db.Integer, db.ForeignKey('tests.id'), nullable=False)
+    question_id = db.Column(db.Integer, db.ForeignKey('questions.id'), nullable=False)
+    question_order = db.Column(db.Integer, nullable=False)
+    
+    # Relationships
+    question = db.relationship('Question', lazy=True)
 
 class Question(db.Model):
     __tablename__ = 'questions'
@@ -90,6 +122,7 @@ class TestAttempt(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     test_package_id = db.Column(db.Integer, db.ForeignKey('test_packages.id'), nullable=False)
+    test_id = db.Column(db.Integer, db.ForeignKey('tests.id'), nullable=True)
     score = db.Column(db.Float, nullable=True)
     total_questions = db.Column(db.Integer, nullable=False)
     correct_answers = db.Column(db.Integer, nullable=False, default=0)

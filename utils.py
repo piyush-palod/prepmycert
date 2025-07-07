@@ -5,7 +5,7 @@ from app import db
 from models import Question, AnswerOption, User
 from werkzeug.security import generate_password_hash
 
-def process_text_with_images(text):
+def process_text_with_images(text, package_id=None):
     """
     Process text and replace IMAGE: references with actual img tags
     Example: "IMAGE: word-image-43535-354.png" or "[IMAGE: word-image-43535-354.png]" becomes an img tag
@@ -20,7 +20,11 @@ def process_text_with_images(text):
     
     def replace_image(match):
         image_filename = match.group(1)
-        image_path = f"/static/images/questions/{image_filename}"
+        if package_id:
+            image_path = f"/static/images/questions/package_{package_id}/{image_filename}"
+        else:
+            # Fallback to old structure for backward compatibility
+            image_path = f"/static/images/questions/{image_filename}"
         return f'<img src="{image_path}" alt="{image_filename}" class="question-image" style="max-width: 100%; height: auto; margin: 10px 0;">'
     
     # Replace all IMAGE: references with img tags
@@ -61,10 +65,10 @@ def import_questions_from_csv(file, test_package_id):
             # Create question with image processing
             question = Question(
                 test_package_id=test_package_id,
-                question_text=process_text_with_images(question_text),
+                question_text=process_text_with_images(question_text, test_package_id),
                 question_type=question_type,
                 domain=domain,
-                overall_explanation=process_text_with_images(overall_explanation)
+                overall_explanation=process_text_with_images(overall_explanation, test_package_id)
             )
             db.session.add(question)
             db.session.flush()  # To get the question ID
@@ -86,8 +90,8 @@ def import_questions_from_csv(file, test_package_id):
                     
                     answer_option = AnswerOption(
                         question_id=question.id,
-                        option_text=process_text_with_images(str(option_text).strip()),
-                        explanation=process_text_with_images(str(explanation).strip()) if explanation and str(explanation).strip().lower() != 'nan' else '',
+                        option_text=process_text_with_images(str(option_text).strip(), test_package_id),
+                        explanation=process_text_with_images(str(explanation).strip(), test_package_id) if explanation and str(explanation).strip().lower() != 'nan' else '',
                         is_correct=is_correct,
                         option_order=i
                     )
@@ -105,6 +109,61 @@ def import_questions_from_csv(file, test_package_id):
     except Exception as e:
         db.session.rollback()
         raise e
+
+def create_tests_from_questions(test_package_id, questions_per_test=50):
+    """
+    Create tests from existing questions in a package
+    """
+    from models import Test, TestQuestion, Question
+    
+    package = db.session.query(Question).filter_by(test_package_id=test_package_id).all()
+    
+    if not package:
+        return {"created": 0, "message": "No questions found in package"}
+    
+    # Delete existing tests for this package
+    existing_tests = Test.query.filter_by(test_package_id=test_package_id).all()
+    for test in existing_tests:
+        db.session.delete(test)
+    
+    total_questions = len(package)
+    num_tests = (total_questions + questions_per_test - 1) // questions_per_test  # Ceiling division
+    
+    created_tests = 0
+    
+    for test_num in range(num_tests):
+        start_idx = test_num * questions_per_test
+        end_idx = min(start_idx + questions_per_test, total_questions)
+        
+        # Create test
+        test = Test(
+            test_package_id=test_package_id,
+            title=f"Practice Test {test_num + 1}",
+            description=f"Questions {start_idx + 1}-{end_idx} from the complete question bank",
+            test_order=test_num + 1,
+            questions_per_test=end_idx - start_idx
+        )
+        db.session.add(test)
+        db.session.flush()  # Get test ID
+        
+        # Add questions to test
+        for i, question in enumerate(package[start_idx:end_idx]):
+            test_question = TestQuestion(
+                test_id=test.id,
+                question_id=question.id,
+                question_order=i + 1
+            )
+            db.session.add(test_question)
+        
+        created_tests += 1
+    
+    db.session.commit()
+    
+    return {
+        "created": created_tests,
+        "total_questions": total_questions,
+        "questions_per_test": questions_per_test
+    }
 
 def create_admin_user():
     """Create an admin user for testing purposes"""
