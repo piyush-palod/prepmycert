@@ -586,6 +586,16 @@ def delete_question(question_id):
     flash('Question deleted successfully!', 'success')
     return redirect(url_for('manage_questions', package_id=package_id))
 
+@app.route('/admin/packages')
+@login_required
+def admin_packages():
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    packages = TestPackage.query.all()
+    return render_template('admin/packages.html', packages=packages)
+
 @app.errorhandler(404)
 def not_found_error(error):
     return render_template('404.html'), 404

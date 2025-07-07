@@ -23,7 +23,10 @@ def create_admin_user():
             db.session.commit()
             print("✅ Admin user created: admin@prepmycert.com / admin123")
         else:
-            print("ℹ️ Admin user already exists")
+            # Update existing user to be admin
+            admin_user.is_admin = True
+            db.session.commit()
+            print("✅ Admin user updated to have admin privileges")
 
 def create_sample_packages():
     """Create sample test packages"""
