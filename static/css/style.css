@@ -195,6 +195,8 @@
     line-height: 1.6;
     color: var(--dark-color);
     margin-bottom: 1rem;
+    white-space: pre-wrap;
+    word-wrap: break-word;
 }
 
 .question-domain {
