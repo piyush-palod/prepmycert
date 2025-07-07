@@ -1,3 +1,4 @@
+
 {% extends "base.html" %}
 
 {% block title %}Import Questions - Admin - PrepMyCert{% endblock %}
@@ -5,43 +6,60 @@
 {% block content %}
 <div class="container py-4">
     <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h3 mb-0">Import Questions & Manage Packages</h1>
+                    <p class="text-muted mb-0">Upload CSV files to import questions or create new test packages</p>
+                </div>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
         <div class="col-lg-8">
             <div class="card">
                 <div class="card-header">
-                    <h4 class="mb-0">
+                    <h5 class="mb-0">
                         <i class="fas fa-upload me-2"></i>Import Questions from CSV
-                    </h4>
+                    </h5>
                 </div>
                 <div class="card-body">
-                    <form method="POST" enctype="multipart/form-data">
+                    <form method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
                         <div class="mb-3">
                             <label for="test_package_id" class="form-label">Select Test Package</label>
                             <select class="form-select" id="test_package_id" name="test_package_id" required>
                                 <option value="">Choose a test package...</option>
                                 {% for package in test_packages %}
-                                    <option value="{{ package.id }}">{{ package.title }} ({{ package.domain }})</option>
+                                <option value="{{ package.id }}">{{ package.title }} ({{ package.questions|length }} questions)</option>
                                 {% endfor %}
                             </select>
+                            <div class="invalid-feedback">Please select a test package.</div>
                         </div>
-                        
+
                         <div class="mb-3">
                             <label for="file" class="form-label">CSV File</label>
-                            <input class="form-control" type="file" id="file" name="file" accept=".csv" required>
-                            <div class="form-text">
-                                Upload a CSV file with questions. The file should contain columns: Question, Question Type, Answer Option 1-6, Explanation 1-6, Correct Answers, Overall Explanation, Domain.
-                            </div>
+                            <input type="file" class="form-control" id="file" name="file" accept=".csv" required>
+                            <div class="invalid-feedback">Please select a CSV file.</div>
                         </div>
-                        
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-upload me-2"></i>Import Questions
-                        </button>
+
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-upload me-2"></i>Import Questions
+                            </button>
+                        </div>
                     </form>
                 </div>
             </div>
-            
+
             <div class="card mt-4">
                 <div class="card-header">
-                    <h5 class="mb-0">CSV Format Requirements</h5>
+                    <h5 class="mb-0">
+                        <i class="fas fa-info-circle me-2"></i>CSV Format Requirements
+                    </h5>
                 </div>
                 <div class="card-body">
                     <p>Your CSV file should have the following columns:</p>
@@ -70,49 +88,45 @@
                     </h5>
                 </div>
                 <div class="card-body">
-                    <form method="POST" action="{{ url_for('create_package') }}">
+                    <form method="POST" action="{{ url_for('create_package') }}" class="needs-validation" novalidate>
                         <div class="mb-3">
                             <label for="title" class="form-label">Package Title</label>
                             <input type="text" class="form-control" id="title" name="title" required>
+                            <div class="invalid-feedback">Please provide a title.</div>
                         </div>
-                        
+
                         <div class="mb-3">
                             <label for="description" class="form-label">Description</label>
                             <textarea class="form-control" id="description" name="description" rows="3" required></textarea>
+                            <div class="invalid-feedback">Please provide a description.</div>
                         </div>
-                        
+
                         <div class="mb-3">
                             <label for="price" class="form-label">Price ($)</label>
-                            <input type="number" class="form-control" id="price" name="price" step="0.01" min="0" required>
+                            <input type="number" class="form-control" id="price" name="price" min="0" step="0.01" required>
+                            <div class="invalid-feedback">Please provide a valid price.</div>
                         </div>
-                        
+
                         <div class="mb-3">
                             <label for="domain" class="form-label">Domain</label>
-                            <select class="form-select" id="domain" name="domain" required>
-                                <option value="">Choose domain...</option>
-                                <option value="Cloud Computing">Cloud Computing</option>
-                                <option value="Cybersecurity">Cybersecurity</option>
-                                <option value="Networking">Networking</option>
-                                <option value="Project Management">Project Management</option>
-                                <option value="Data Analytics">Data Analytics</option>
-                                <option value="DevOps">DevOps</option>
-                                <option value="AI/ML">AI/ML</option>
-                            </select>
+                            <input type="text" class="form-control" id="domain" name="domain" required 
+                                   placeholder="e.g., Cloud Computing, Cybersecurity">
+                            <div class="invalid-feedback">Please provide a domain.</div>
                         </div>
-                        
-                        <button type="submit" class="btn btn-success w-100">
-                            <i class="fas fa-plus me-2"></i>Create Package
-                        </button>
+
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-plus me-2"></i>Create Package
+                            </button>
+                        </div>
                     </form>
                 </div>
             </div>
-        </div>
-        
-        <div class="col-lg-4">
-            <div class="card">
+
+            <div class="card mt-4">
                 <div class="card-header">
                     <h5 class="mb-0">
-                        <i class="fas fa-cog me-2"></i>Manage Existing Packages
+                        <i class="fas fa-list me-2"></i>Existing Packages
                     </h5>
                 </div>
                 <div class="card-body">
@@ -144,9 +158,16 @@
                     </h6>
                 </div>
                 <div class="card-body">
-                    <p class="small">Questions can include images! Use this format in your CSV:</p>
-                    <code class="small">IMAGE: filename.png</code>
-                    <p class="small mt-2">Upload your images to <code>/static/images/questions/</code> folder before importing.</p>
+                    <p class="small">To include images in your questions:</p>
+                    <ol class="small">
+                        <li>Upload images to <code>/static/images/questions/[package_name]/</code></li>
+                        <li>Use <code>IMAGE: filename.png</code> in your CSV or question text</li>
+                        <li>Each package gets its own image folder automatically</li>
+                    </ol>
+                    <div class="alert alert-warning alert-sm">
+                        <i class="fas fa-exclamation-triangle me-1"></i>
+                        <small>Package names are converted to safe folder names (spaces become underscores, special characters removed)</small>
+                    </div>
                 </div>
             </div>
         </div>

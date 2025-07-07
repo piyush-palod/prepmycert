@@ -5,10 +5,11 @@ from app import db
 from models import Question, AnswerOption, User
 from werkzeug.security import generate_password_hash
 
-def process_text_with_images(text):
+def process_text_with_images(text, package_name=None):
     """
     Process text and replace IMAGE: references with actual img tags
     Example: "IMAGE: word-image-43535-354.png" or "[IMAGE: word-image-43535-354.png]" becomes an img tag
+    Images are organized by package name in separate folders
     """
     if not text or pd.isna(text):
         return ""
@@ -20,7 +21,13 @@ def process_text_with_images(text):
     
     def replace_image(match):
         image_filename = match.group(1)
-        image_path = f"/static/images/questions/{image_filename}"
+        # Use package-specific folder if package_name is provided, otherwise fall back to general folder
+        if package_name:
+            # Create a safe folder name from package title
+            safe_package_name = re.sub(r'[^a-zA-Z0-9\-_]', '_', package_name.lower().replace(' ', '_'))
+            image_path = f"/static/images/questions/{safe_package_name}/{image_filename}"
+        else:
+            image_path = f"/static/images/questions/{image_filename}"
         return f'<img src="{image_path}" alt="{image_filename}" class="question-image" style="max-width: 100%; height: auto; margin: 10px 0;">'
     
     # Replace all IMAGE: references with img tags
@@ -58,13 +65,18 @@ def import_questions_from_csv(file, test_package_id):
                 skipped_count += 1
                 continue
             
+            # Get package for folder naming
+            from models import TestPackage
+            package = TestPackage.query.get(test_package_id)
+            package_name = package.title if package else None
+            
             # Create question with image processing
             question = Question(
                 test_package_id=test_package_id,
-                question_text=process_text_with_images(question_text),
+                question_text=process_text_with_images(question_text, package_name),
                 question_type=question_type,
                 domain=domain,
-                overall_explanation=process_text_with_images(overall_explanation)
+                overall_explanation=process_text_with_images(overall_explanation, package_name)
             )
             db.session.add(question)
             db.session.flush()  # To get the question ID
@@ -86,8 +98,8 @@ def import_questions_from_csv(file, test_package_id):
                     
                     answer_option = AnswerOption(
                         question_id=question.id,
-                        option_text=process_text_with_images(str(option_text).strip()),
-                        explanation=process_text_with_images(str(explanation).strip()) if explanation and str(explanation).strip().lower() != 'nan' else '',
+                        option_text=process_text_with_images(str(option_text).strip(), package_name),
+                        explanation=process_text_with_images(str(explanation).strip(), package_name) if explanation and str(explanation).strip().lower() != 'nan' else '',
                         is_correct=is_correct,
                         option_order=i
                     )

@@ -1,4 +1,5 @@
 import os
+import re
 import stripe
 from flask import render_template, request, redirect, url_for, flash, session, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
@@ -242,7 +243,7 @@ def take_test(package_id):
         
         questions_data.append({
             'id': question.id,
-            'text': process_text_with_images(question.question_text),
+            'text': process_text_with_images(question.question_text, package.title),
             'type': question.question_type,
             'domain': question.domain,
             'options': options_data
@@ -361,14 +362,17 @@ def test_results(attempt_id):
     # Process user answers to include image processing
     user_answers = []
     for user_answer, question, selected_option in user_answers_raw:
+        # Get package title for image processing
+        package_title = test_attempt.test_package.title
+        
         # Process question text for images
         processed_question = Question(
             id=question.id,
             test_package_id=question.test_package_id,
-            question_text=process_text_with_images(question.question_text),
+            question_text=process_text_with_images(question.question_text, package_title),
             question_type=question.question_type,
             domain=question.domain,
-            overall_explanation=process_text_with_images(question.overall_explanation) if question.overall_explanation else ''
+            overall_explanation=process_text_with_images(question.overall_explanation, package_title) if question.overall_explanation else ''
         )
         
         # Process answer options for images
@@ -377,8 +381,8 @@ def test_results(attempt_id):
             processed_option = AnswerOption(
                 id=option.id,
                 question_id=option.question_id,
-                option_text=process_text_with_images(option.option_text),
-                explanation=process_text_with_images(option.explanation) if option.explanation else '',
+                option_text=process_text_with_images(option.option_text, package_title),
+                explanation=process_text_with_images(option.explanation, package_title) if option.explanation else '',
                 is_correct=option.is_correct,
                 option_order=option.option_order
             )
@@ -393,8 +397,8 @@ def test_results(attempt_id):
             processed_selected_option = AnswerOption(
                 id=selected_option.id,
                 question_id=selected_option.question_id,
-                option_text=process_text_with_images(selected_option.option_text),
-                explanation=process_text_with_images(selected_option.explanation) if selected_option.explanation else '',
+                option_text=process_text_with_images(selected_option.option_text, package_title),
+                explanation=process_text_with_images(selected_option.explanation, package_title) if selected_option.explanation else '',
                 is_correct=selected_option.is_correct,
                 option_order=selected_option.option_order
             )
@@ -465,7 +469,29 @@ def create_package():
         )
         db.session.add(package)
         db.session.commit()
-        flash('Test package created successfully.', 'success')
+        
+        # Create package-specific image folder
+        safe_package_name = re.sub(r'[^a-zA-Z0-9\-_]', '_', title.lower().replace(' ', '_'))
+        package_image_dir = os.path.join('static', 'images', 'questions', safe_package_name)
+        os.makedirs(package_image_dir, exist_ok=True)
+        
+        # Create a README file in the package folder
+        readme_path = os.path.join(package_image_dir, 'README.md')
+        with open(readme_path, 'w') as f:
+            f.write(f"# Images for {title}\n\n")
+            f.write(f"This folder contains images used in questions for the '{title}' test package.\n\n")
+            f.write("## How to Use Images\n\n")
+            f.write("1. Upload your image files (PNG, JPG, JPEG, GIF, SVG) to this folder\n")
+            f.write("2. In your CSV file or when creating questions, reference images using this format:\n")
+            f.write("   ```\n   IMAGE: filename.png\n   ```\n\n")
+            f.write("## Supported Formats\n")
+            f.write("- PNG\n- JPG/JPEG\n- GIF\n- SVG\n\n")
+            f.write("## Notes\n")
+            f.write("- Images will be automatically resized to fit properly in the question interface\n")
+            f.write("- Make sure filenames match exactly (case-sensitive)\n")
+            f.write("- Use descriptive filenames for easier management\n")
+        
+        flash('Test package created successfully with dedicated image folder.', 'success')
     except Exception as e:
         flash(f'Error creating package: {str(e)}', 'error')
     
@@ -498,12 +524,15 @@ def edit_question(question_id):
             domain = request.form.get('domain', '')
             overall_explanation = request.form.get('overall_explanation', '')
             
+            # Get package title for image processing
+            package_title = question.test_package.title
+            
             if question_text:
-                question.question_text = process_text_with_images(question_text)
+                question.question_text = process_text_with_images(question_text, package_title)
             if domain:
                 question.domain = domain
             if overall_explanation:
-                question.overall_explanation = process_text_with_images(overall_explanation)
+                question.overall_explanation = process_text_with_images(overall_explanation, package_title)
             
             # Update answer options
             for option in question.answer_options:
@@ -512,8 +541,8 @@ def edit_question(question_id):
                 option_correct = request.form.get(f'option_correct_{option.id}') == 'on'
                 
                 if option_text:
-                    option.option_text = process_text_with_images(option_text)
-                    option.explanation = process_text_with_images(option_explanation) if option_explanation else ''
+                    option.option_text = process_text_with_images(option_text, package_title)
+                    option.explanation = process_text_with_images(option_explanation, package_title) if option_explanation else ''
                     option.is_correct = option_correct
             
             db.session.commit()
@@ -539,10 +568,10 @@ def add_question(package_id):
     if request.method == 'POST':
         question = Question(
             test_package_id=package_id,
-            question_text=process_text_with_images(request.form.get('question_text')),
+            question_text=process_text_with_images(request.form.get('question_text'), package.title),
             question_type=request.form.get('question_type', 'multiple-choice'),
             domain=request.form.get('domain'),
-            overall_explanation=process_text_with_images(request.form.get('overall_explanation'))
+            overall_explanation=process_text_with_images(request.form.get('overall_explanation'), package.title)
         )
         db.session.add(question)
         db.session.flush()
@@ -557,8 +586,8 @@ def add_question(package_id):
             if option_text:
                 option = AnswerOption(
                     question_id=question.id,
-                    option_text=process_text_with_images(option_text),
-                    explanation=process_text_with_images(option_explanation) if option_explanation else '',
+                    option_text=process_text_with_images(option_text, package.title),
+                    explanation=process_text_with_images(option_explanation, package.title) if option_explanation else '',
                     is_correct=option_correct,
                     option_order=i
                 )
