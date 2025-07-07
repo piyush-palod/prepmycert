@@ -8,15 +8,15 @@ from werkzeug.security import generate_password_hash
 def process_text_with_images(text):
     """
     Process text and replace IMAGE: references with actual img tags
-    Example: "IMAGE: word-image-43535-354.png" becomes an img tag
+    Example: "IMAGE: word-image-43535-354.png" or "[IMAGE: word-image-43535-354.png]" becomes an img tag
     """
     if not text or pd.isna(text):
         return ""
     
     text = str(text)
     
-    # Pattern to match IMAGE: references
-    image_pattern = r'IMAGE:\s*([^\s\]]+\.(png|jpg|jpeg|gif|svg))'
+    # Pattern to match IMAGE: references with or without square brackets
+    image_pattern = r'\[?IMAGE:\s*([^\s\]]+\.(png|jpg|jpeg|gif|svg))\]?'
     
     def replace_image(match):
         image_filename = match.group(1)
