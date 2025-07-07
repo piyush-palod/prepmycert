@@ -490,6 +490,14 @@ def create_package():
             f.write("- Images will be automatically resized to fit properly in the question interface\n")
             f.write("- Make sure filenames match exactly (case-sensitive)\n")
             f.write("- Use descriptive filenames for easier management\n")
+            f.write("- Images will be automatically resized to fit properly in the question interface\n")
+            f.write("- Make sure filenames match exactly (case-sensitive)\n")
+            f.write("- Use descriptive filenames for easier management\n")
+            f.write("- Use descriptive filenames for easier management\n")
+            f.write("- Use descriptive filenames for easier management\n")
+            f.write("- Use descriptive filenames for easier management\n")
+            f.write("- Use descriptive filenames for easier management\n")
+            f.write("- Use descriptive filenames for easier management\n")
         
         flash('Test package created successfully with dedicated image folder.', 'success')
     except Exception as e:
@@ -621,9 +629,46 @@ def admin_packages():
     if not current_user.is_admin:
         flash('Access denied. Admin privileges required.', 'error')
         return redirect(url_for('dashboard'))
-    
+
     packages = TestPackage.query.all()
     return render_template('admin/packages.html', packages=packages)
+
+@app.route('/admin/users')
+@login_required
+def admin_users():
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('dashboard'))
+
+    users = User.query.order_by(User.created_at.desc()).all()
+    return render_template('admin/users.html', users=users)
+
+@app.route('/admin/toggle-admin/<int:user_id>', methods=['POST'])
+@login_required
+def toggle_admin(user_id):
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('dashboard'))
+
+    user = User.query.get_or_404(user_id)
+
+    # Prevent removing admin from the environment-specified admin
+    admin_email = os.environ.get('ADMIN_EMAIL')
+    if admin_email and user.email == admin_email and user.is_admin:
+        flash('Cannot remove admin privileges from the environment-specified admin user.', 'error')
+        return redirect(url_for('admin_users'))
+
+    # Prevent user from removing their own admin privileges
+    if user.id == current_user.id:
+        flash('You cannot remove your own admin privileges.', 'error')
+        return redirect(url_for('admin_users'))
+
+    user.is_admin = not user.is_admin
+    db.session.commit()
+
+    action = 'granted' if user.is_admin else 'removed'
+    flash(f'Admin privileges {action} for {user.email}.', 'success')
+    return redirect(url_for('admin_users'))
 
 @app.errorhandler(404)
 def not_found_error(error):

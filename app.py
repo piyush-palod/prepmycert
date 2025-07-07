@@ -41,8 +41,34 @@ def load_user(user_id):
     from models import User
     return User.query.get(int(user_id))
 
-# Create tables
+# Create tables and setup initial admin
 with app.app_context():
     import models  # noqa: F401
     db.create_all()
     logging.info("Database tables created")
+    
+    # Auto-create admin user if specified in environment and no admin exists
+    from models import User
+    admin_email = os.environ.get('ADMIN_EMAIL')
+    if admin_email:
+        existing_admin = User.query.filter_by(is_admin=True).first()
+        if not existing_admin:
+            admin_user = User.query.filter_by(email=admin_email).first()
+            if admin_user:
+                # Promote existing user to admin
+                admin_user.is_admin = True
+                db.session.commit()
+                logging.info(f"Promoted existing user {admin_email} to admin")
+            else:
+                # Create new admin user with default password
+                default_password = os.environ.get('ADMIN_PASSWORD', 'admin123')
+                admin_user = User(
+                    email=admin_email,
+                    first_name='Admin',
+                    last_name='User',
+                    is_admin=True
+                )
+                admin_user.set_password(default_password)
+                db.session.add(admin_user)
+                db.session.commit()
+                logging.info(f"Created new admin user: {admin_email}")
