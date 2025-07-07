@@ -1,0 +1,85 @@
+
+{% extends "base.html" %}
+
+{% block title %}Edit Question - PrepMyCert{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Edit Question</h5>
+                        <a href="{{ url_for('manage_questions', package_id=question.test_package_id) }}" 
+                           class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-arrow-left me-2"></i>Back
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <div class="mb-3">
+                            <label for="question_text" class="form-label">Question Text</label>
+                            <textarea class="form-control" id="question_text" name="question_text" 
+                                      rows="4" required>{{ question.question_text|safe }}</textarea>
+                            <div class="form-text">You can include images using: IMAGE: filename.png</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="domain" class="form-label">Domain</label>
+                            <input type="text" class="form-control" id="domain" name="domain" 
+                                   value="{{ question.domain }}" required>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="overall_explanation" class="form-label">Overall Explanation (Optional)</label>
+                            <textarea class="form-control" id="overall_explanation" name="overall_explanation" 
+                                      rows="3">{{ question.overall_explanation|safe if question.overall_explanation else '' }}</textarea>
+                        </div>
+
+                        <h6>Answer Options</h6>
+                        {% for option in question.answer_options|sort(attribute='option_order') %}
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <label class="form-label">Option {{ option.option_order }}</label>
+                                        <textarea class="form-control mb-2" 
+                                                  name="option_text_{{ option.id }}" 
+                                                  rows="2" required>{{ option.option_text|safe }}</textarea>
+                                        
+                                        <label class="form-label">Explanation (Optional)</label>
+                                        <textarea class="form-control" 
+                                                  name="option_explanation_{{ option.id }}" 
+                                                  rows="2">{{ option.explanation|safe if option.explanation else '' }}</textarea>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-check mt-4">
+                                            <input class="form-check-input" type="checkbox" 
+                                                   name="option_correct_{{ option.id }}" 
+                                                   id="option_correct_{{ option.id }}"
+                                                   {% if option.is_correct %}checked{% endif %}>
+                                            <label class="form-check-label text-success fw-bold" 
+                                                   for="option_correct_{{ option.id }}">
+                                                Correct Answer
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i>Update Question
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

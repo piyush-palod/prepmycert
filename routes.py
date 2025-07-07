@@ -449,24 +449,38 @@ def edit_question(question_id):
     question = Question.query.get_or_404(question_id)
     
     if request.method == 'POST':
-        question.question_text = process_text_with_images(request.form.get('question_text'))
-        question.domain = request.form.get('domain')
-        question.overall_explanation = process_text_with_images(request.form.get('overall_explanation'))
-        
-        # Update answer options
-        for option in question.answer_options:
-            option_text = request.form.get(f'option_text_{option.id}')
-            option_explanation = request.form.get(f'option_explanation_{option.id}')
-            option_correct = request.form.get(f'option_correct_{option.id}') == 'on'
+        try:
+            # Update question details
+            question_text = request.form.get('question_text', '')
+            domain = request.form.get('domain', '')
+            overall_explanation = request.form.get('overall_explanation', '')
             
-            if option_text:
-                option.option_text = process_text_with_images(option_text)
-                option.explanation = process_text_with_images(option_explanation) if option_explanation else ''
-                option.is_correct = option_correct
-        
-        db.session.commit()
-        flash('Question updated successfully!', 'success')
-        return redirect(url_for('manage_questions', package_id=question.test_package_id))
+            if question_text:
+                question.question_text = process_text_with_images(question_text)
+            if domain:
+                question.domain = domain
+            if overall_explanation:
+                question.overall_explanation = process_text_with_images(overall_explanation)
+            
+            # Update answer options
+            for option in question.answer_options:
+                option_text = request.form.get(f'option_text_{option.id}')
+                option_explanation = request.form.get(f'option_explanation_{option.id}', '')
+                option_correct = request.form.get(f'option_correct_{option.id}') == 'on'
+                
+                if option_text:
+                    option.option_text = process_text_with_images(option_text)
+                    option.explanation = process_text_with_images(option_explanation) if option_explanation else ''
+                    option.is_correct = option_correct
+            
+            db.session.commit()
+            flash('Question updated successfully!', 'success')
+            return redirect(url_for('manage_questions', package_id=question.test_package_id))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating question: {str(e)}', 'error')
+            return render_template('admin/edit_question.html', question=question)
     
     return render_template('admin/edit_question.html', question=question)
 
