@@ -350,13 +350,56 @@ def test_results(attempt_id):
         return redirect(url_for('dashboard'))
     
     # Get user answers with question details
-    user_answers = db.session.query(UserAnswer, Question, AnswerOption).join(
+    user_answers_raw = db.session.query(UserAnswer, Question, AnswerOption).join(
         Question, UserAnswer.question_id == Question.id
     ).outerjoin(
         AnswerOption, UserAnswer.selected_option_id == AnswerOption.id
     ).filter(
         UserAnswer.test_attempt_id == attempt_id
     ).all()
+    
+    # Process user answers to include image processing
+    user_answers = []
+    for user_answer, question, selected_option in user_answers_raw:
+        # Process question text for images
+        processed_question = Question(
+            id=question.id,
+            test_package_id=question.test_package_id,
+            question_text=process_text_with_images(question.question_text),
+            question_type=question.question_type,
+            domain=question.domain,
+            overall_explanation=process_text_with_images(question.overall_explanation) if question.overall_explanation else ''
+        )
+        
+        # Process answer options for images
+        processed_options = []
+        for option in question.answer_options:
+            processed_option = AnswerOption(
+                id=option.id,
+                question_id=option.question_id,
+                option_text=process_text_with_images(option.option_text),
+                explanation=process_text_with_images(option.explanation) if option.explanation else '',
+                is_correct=option.is_correct,
+                option_order=option.option_order
+            )
+            processed_options.append(processed_option)
+        
+        # Attach processed options to processed question
+        processed_question.answer_options = processed_options
+        
+        # Process selected option if it exists
+        processed_selected_option = None
+        if selected_option:
+            processed_selected_option = AnswerOption(
+                id=selected_option.id,
+                question_id=selected_option.question_id,
+                option_text=process_text_with_images(selected_option.option_text),
+                explanation=process_text_with_images(selected_option.explanation) if selected_option.explanation else '',
+                is_correct=selected_option.is_correct,
+                option_order=selected_option.option_order
+            )
+        
+        user_answers.append((user_answer, processed_question, processed_selected_option))
     
     return render_template('test_results.html', 
                          test_attempt=test_attempt,
