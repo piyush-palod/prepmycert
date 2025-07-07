@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+
+{% block title %}Test Results - PrepMyCert{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header bg-{{ 'success' if test_attempt.score >= 70 else 'warning' if test_attempt.score >= 50 else 'danger' }} text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-{{ 'check-circle' if test_attempt.score >= 70 else 'exclamation-triangle' if test_attempt.score >= 50 else 'times-circle' }} me-2"></i>
+                        Test Results
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center mb-4">
+                        <div class="col-md-3">
+                            <div class="result-stat">
+                                <div class="stat-number text-{{ 'success' if test_attempt.score >= 70 else 'warning' if test_attempt.score >= 50 else 'danger' }}">
+                                    {{ "%.1f"|format(test_attempt.score) }}%
+                                </div>
+                                <div class="stat-label">Overall Score</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="result-stat">
+                                <div class="stat-number text-success">{{ test_attempt.correct_answers }}</div>
+                                <div class="stat-label">Correct</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="result-stat">
+                                <div class="stat-number text-danger">{{ test_attempt.total_questions - test_attempt.correct_answers }}</div>
+                                <div class="stat-label">Incorrect</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="result-stat">
+                                <div class="stat-number text-info">{{ test_attempt.total_questions }}</div>
+                                <div class="stat-label">Total</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="progress mb-4" style="height: 20px;">
+                        <div class="progress-bar bg-{{ 'success' if test_attempt.score >= 70 else 'warning' if test_attempt.score >= 50 else 'danger' }}" 
+                             style="width: {{ test_attempt.score }}%">
+                            {{ "%.1f"|format(test_attempt.score) }}%
+                        </div>
+                    </div>
+                    
+                    <div class="performance-message text-center mb-4">
+                        {% if test_attempt.score >= 70 %}
+                            <div class="alert alert-success">
+                                <i class="fas fa-trophy me-2"></i>
+                                <strong>Excellent!</strong> You're well-prepared for the certification exam.
+                            </div>
+                        {% elif test_attempt.score >= 50 %}
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                <strong>Good effort!</strong> Review the incorrect answers and try again.
+                            </div>
+                        {% else %}
+                            <div class="alert alert-danger">
+                                <i class="fas fa-times-circle me-2"></i>
+                                <strong>Keep studying!</strong> Focus on the areas where you need improvement.
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Detailed Results -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list me-2"></i>Detailed Review
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% for user_answer, question, selected_option in user_answers %}
+                    <div class="question-review mb-4">
+                        <div class="question-header">
+                            <h6>
+                                <span class="badge bg-{{ 'success' if user_answer.is_correct else 'danger' }} me-2">
+                                    {{ loop.index }}
+                                </span>
+                                {{ question.question_text|safe }}
+                            </h6>
+                            <small class="text-muted">Domain: {{ question.domain }}</small>
+                        </div>
+                        
+                        <div class="answer-review mt-3">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="answer-section">
+                                        <h6 class="text-{{ 'success' if user_answer.is_correct else 'danger' }}">
+                                            <i class="fas fa-{{ 'check' if user_answer.is_correct else 'times' }} me-2"></i>
+                                            Your Answer
+                                        </h6>
+                                        {% if selected_option %}
+                                            <p class="answer-text">{{ selected_option.option_text }}</p>
+                                            {% if selected_option.explanation %}
+                                                <p class="explanation text-muted">{{ selected_option.explanation }}</p>
+                                            {% endif %}
+                                        {% else %}
+                                            <p class="text-muted">No answer selected</p>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="answer-section">
+                                        <h6 class="text-success">
+                                            <i class="fas fa-check me-2"></i>
+                                            Correct Answer
+                                        </h6>
+                                        {% for option in question.answer_options if option.is_correct %}
+                                            <p class="answer-text">{{ option.option_text }}</p>
+                                            {% if option.explanation %}
+                                                <p class="explanation text-muted">{{ option.explanation }}</p>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {% if question.overall_explanation %}
+                                <div class="overall-explanation mt-3">
+                                    <h6>Overall Explanation</h6>
+                                    <p class="text-muted">{{ question.overall_explanation }}</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card sticky-top">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-chart-pie me-2"></i>Test Summary
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="summary-stats">
+                        <div class="stat-item">
+                            <div class="stat-label">Test Package</div>
+                            <div class="stat-value">{{ test_attempt.test_package.title }}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Completed</div>
+                            <div class="stat-value">{{ test_attempt.end_time.strftime('%B %d, %Y at %I:%M %p') }}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Duration</div>
+                            <div class="stat-value">
+                                {% set duration = test_attempt.end_time - test_attempt.start_time %}
+                                {{ duration.seconds // 60 }} minutes
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="actions mt-4">
+                        <a href="{{ url_for('take_test', package_id=test_attempt.test_package.id) }}" class="btn btn-primary w-100 mb-2">
+                            <i class="fas fa-redo me-2"></i>Retake Test
+                        </a>
+                        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary w-100">
+                            <i class="fas fa-home me-2"></i>Back to Dashboard
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

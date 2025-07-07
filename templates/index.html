@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="hero-section">
+    <div class="container">
+        <div class="row align-items-center min-vh-75">
+            <div class="col-lg-6">
+                <h1 class="display-4 fw-bold text-white mb-4">
+                    Master Your Certification Exams
+                </h1>
+                <p class="lead text-white-75 mb-4">
+                    Comprehensive test preparation platform for cloud computing, cybersecurity, networking, and project management certifications. One-time purchase, lifetime access.
+                </p>
+                <div class="d-flex gap-3">
+                    <a href="{{ url_for('test_packages') }}" class="btn btn-success btn-lg">
+                        <i class="fas fa-rocket me-2"></i>Browse Test Packages
+                    </a>
+                    {% if not current_user.is_authenticated %}
+                        <a href="{{ url_for('register') }}" class="btn btn-outline-white btn-lg">
+                            <i class="fas fa-user-plus me-2"></i>Get Started
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="text-center">
+                    <div class="hero-graphic">
+                        <i class="fas fa-graduation-cap text-white" style="font-size: 8rem; opacity: 0.9;"></i>
+                        <div class="hero-accent mt-3">
+                            <span class="badge bg-success fs-6 me-2">Cloud Computing</span>
+                            <span class="badge bg-info fs-6 me-2">Cybersecurity</span>
+                            <span class="badge bg-warning fs-6">Networking</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container py-5">
+    <!-- Features Section -->
+    <section class="mb-5">
+        <div class="text-center mb-5">
+            <h2 class="display-5 fw-bold text-primary">Why Choose PrepMyCert?</h2>
+            <p class="lead text-muted">Everything you need to pass your certification exams</p>
+        </div>
+        
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="card feature-card h-100">
+                    <div class="card-body text-center">
+                        <div class="feature-icon">
+                            <i class="fas fa-infinity text-primary"></i>
+                        </div>
+                        <h5 class="card-title">Lifetime Access</h5>
+                        <p class="card-text">One-time purchase gives you unlimited access to all test content and updates.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card feature-card h-100">
+                    <div class="card-body text-center">
+                        <div class="feature-icon">
+                            <i class="fas fa-brain text-success"></i>
+                        </div>
+                        <h5 class="card-title">Interactive Learning</h5>
+                        <p class="card-text">Detailed explanations for every answer option help you understand concepts deeply.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card feature-card h-100">
+                    <div class="card-body text-center">
+                        <div class="feature-icon">
+                            <i class="fas fa-chart-line text-warning"></i>
+                        </div>
+                        <h5 class="card-title">Progress Tracking</h5>
+                        <p class="card-text">Track your performance and identify areas for improvement with detailed analytics.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Test Packages Preview -->
+    {% if test_packages %}
+    <section class="mb-5">
+        <div class="text-center mb-5">
+            <h2 class="display-5 fw-bold text-primary">Popular Test Packages</h2>
+            <p class="lead text-muted">Start your certification journey today</p>
+        </div>
+        
+        <div class="row g-4">
+            {% for package in test_packages[:3] %}
+            <div class="col-lg-4">
+                <div class="card package-card h-100">
+                    <div class="card-body">
+                        <div class="package-domain">{{ package.domain }}</div>
+                        <h5 class="card-title">{{ package.title }}</h5>
+                        <p class="card-text">{{ package.description[:100] }}...</p>
+                        <div class="package-stats">
+                            <small class="text-muted">
+                                <i class="fas fa-question-circle me-1"></i>{{ package.question_count }} Questions
+                            </small>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="package-price">${{ "%.2f"|format(package.price) }}</div>
+                            <a href="{{ url_for('package_detail', package_id=package.id) }}" class="btn btn-primary">
+                                Learn More
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="text-center mt-4">
+            <a href="{{ url_for('test_packages') }}" class="btn btn-outline-primary btn-lg">
+                View All Packages <i class="fas fa-arrow-right ms-2"></i>
+            </a>
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- CTA Section -->
+    <section class="cta-section text-center py-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <h2 class="display-5 fw-bold text-white mb-4">Ready to Start Your Journey?</h2>
+                <p class="lead text-white-75 mb-4">
+                    Join thousands of professionals who have successfully passed their certification exams with PrepMyCert.
+                </p>
+                {% if current_user.is_authenticated %}
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-success btn-lg">
+                        <i class="fas fa-tachometer-alt me-2"></i>Go to Dashboard
+                    </a>
+                {% else %}
+                    <a href="{{ url_for('register') }}" class="btn btn-success btn-lg">
+                        <i class="fas fa-user-plus me-2"></i>Create Your Account
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}

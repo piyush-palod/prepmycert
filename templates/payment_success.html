@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Payment Successful - PrepMyCert{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <div class="card text-center">
+                <div class="card-body py-5">
+                    <div class="success-icon mb-4">
+                        <i class="fas fa-check-circle text-success" style="font-size: 5rem;"></i>
+                    </div>
+                    <h2 class="text-success mb-3">Payment Successful!</h2>
+                    <p class="lead mb-4">Thank you for your purchase. You now have lifetime access to your test package.</p>
+                    
+                    <div class="alert alert-success">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Your test package has been added to your dashboard and you can start taking tests immediately.
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                        <a href="{{ url_for('dashboard') }}" class="btn btn-primary btn-lg">
+                            <i class="fas fa-tachometer-alt me-2"></i>Go to Dashboard
+                        </a>
+                        <a href="{{ url_for('test_packages') }}" class="btn btn-outline-secondary btn-lg">
+                            <i class="fas fa-shopping-cart me-2"></i>Browse More Packages
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

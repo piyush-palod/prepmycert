@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block title %}{{ package.title }} - PrepMyCert{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-body">
+                    <div class="package-domain">{{ package.domain }}</div>
+                    <h1 class="card-title">{{ package.title }}</h1>
+                    <p class="card-text lead">{{ package.description }}</p>
+                    
+                    <div class="package-features mt-4">
+                        <h5>What's Included:</h5>
+                        <ul class="list-unstyled">
+                            <li><i class="fas fa-check text-success me-2"></i>{{ package.question_count }} Practice Questions</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Detailed explanations for all answer options</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Unlimited test attempts</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Progress tracking and analytics</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Lifetime access</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Mobile-friendly interface</li>
+                        </ul>
+                    </div>
+
+                    <div class="package-benefits mt-4">
+                        <h5>Why Choose This Package:</h5>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="feature-item">
+                                    <i class="fas fa-brain text-primary me-2"></i>
+                                    <strong>Comprehensive Coverage</strong>
+                                    <p class="small text-muted mb-0">All exam topics covered in detail</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-item">
+                                    <i class="fas fa-chart-line text-success me-2"></i>
+                                    <strong>Performance Tracking</strong>
+                                    <p class="small text-muted mb-0">Monitor your progress and improvement</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-item">
+                                    <i class="fas fa-lightbulb text-warning me-2"></i>
+                                    <strong>Detailed Explanations</strong>
+                                    <p class="small text-muted mb-0">Understand why each answer is correct or incorrect</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-item">
+                                    <i class="fas fa-infinity text-info me-2"></i>
+                                    <strong>Unlimited Access</strong>
+                                    <p class="small text-muted mb-0">Study at your own pace, anytime</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card sticky-top">
+                <div class="card-body text-center">
+                    <div class="package-price-large mb-3">${{ "%.2f"|format(package.price) }}</div>
+                    <p class="text-muted mb-3">One-time payment • Lifetime access</p>
+                    
+                    {% if current_user.is_authenticated %}
+                        {% if has_purchased %}
+                            <div class="alert alert-success">
+                                <i class="fas fa-check-circle me-2"></i>You own this package
+                            </div>
+                            <a href="{{ url_for('take_test', package_id=package.id) }}" class="btn btn-success btn-lg w-100 mb-3">
+                                <i class="fas fa-play me-2"></i>Take Test
+                            </a>
+                        {% elif current_user.is_admin %}
+                            <div class="alert alert-info">
+                                <i class="fas fa-user-shield me-2"></i>Admin Access
+                            </div>
+                            <a href="{{ url_for('take_test', package_id=package.id) }}" class="btn btn-warning btn-lg w-100 mb-3">
+                                <i class="fas fa-play me-2"></i>Take Test (Admin)
+                            </a>
+                        {% else %}
+                            <form method="POST" action="{{ url_for('create_checkout_session') }}">
+                                <input type="hidden" name="package_id" value="{{ package.id }}">
+                                <button type="submit" class="btn btn-primary btn-lg w-100 mb-3">
+                                    <i class="fas fa-shopping-cart me-2"></i>Purchase Now
+                                </button>
+                            </form>
+                        {% endif %}
+                    {% else %}
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>Please log in to purchase
+                        </div>
+                        <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg w-100 mb-3">
+                            <i class="fas fa-sign-in-alt me-2"></i>Login to Purchase
+                        </a>
+                    {% endif %}
+                    
+                    <div class="package-stats text-center">
+                        <div class="row">
+                            <div class="col">
+                                <div class="stat-number">{{ package.question_count }}</div>
+                                <div class="stat-label">Questions</div>
+                            </div>
+                            <div class="col">
+                                <div class="stat-number">∞</div>
+                                <div class="stat-label">Attempts</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

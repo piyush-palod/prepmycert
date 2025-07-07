@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Payment Cancelled - PrepMyCert{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <div class="card text-center">
+                <div class="card-body py-5">
+                    <div class="cancel-icon mb-4">
+                        <i class="fas fa-times-circle text-warning" style="font-size: 5rem;"></i>
+                    </div>
+                    <h2 class="text-warning mb-3">Payment Cancelled</h2>
+                    <p class="lead mb-4">Your payment was cancelled. No charges were made to your account.</p>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        You can try again anytime or browse our other test packages.
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                        {% if package_id %}
+                            <a href="{{ url_for('package_detail', package_id=package_id) }}" class="btn btn-primary btn-lg">
+                                <i class="fas fa-arrow-left me-2"></i>Try Again
+                            </a>
+                        {% endif %}
+                        <a href="{{ url_for('test_packages') }}" class="btn btn-outline-secondary btn-lg">
+                            <i class="fas fa-shopping-cart me-2"></i>Browse Packages
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

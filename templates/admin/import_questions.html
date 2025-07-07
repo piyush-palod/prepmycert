@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}Import Questions - Admin - PrepMyCert{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">
+                        <i class="fas fa-upload me-2"></i>Import Questions from CSV
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label for="test_package_id" class="form-label">Select Test Package</label>
+                            <select class="form-select" id="test_package_id" name="test_package_id" required>
+                                <option value="">Choose a test package...</option>
+                                {% for package in test_packages %}
+                                    <option value="{{ package.id }}">{{ package.title }} ({{ package.domain }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="file" class="form-label">CSV File</label>
+                            <input class="form-control" type="file" id="file" name="file" accept=".csv" required>
+                            <div class="form-text">
+                                Upload a CSV file with questions. The file should contain columns: Question, Question Type, Answer Option 1-6, Explanation 1-6, Correct Answers, Overall Explanation, Domain.
+                            </div>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-upload me-2"></i>Import Questions
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="mb-0">CSV Format Requirements</h5>
+                </div>
+                <div class="card-body">
+                    <p>Your CSV file should have the following columns:</p>
+                    <ul>
+                        <li><strong>Question</strong> - The question text</li>
+                        <li><strong>Question Type</strong> - Type of question (e.g., multiple-choice)</li>
+                        <li><strong>Answer Option 1-6</strong> - Up to 6 answer options</li>
+                        <li><strong>Explanation 1-6</strong> - Explanations for each answer option</li>
+                        <li><strong>Correct Answers</strong> - Numbers of correct options (e.g., "1", "1,3", "2")</li>
+                        <li><strong>Overall Explanation</strong> - General explanation for the question</li>
+                        <li><strong>Domain</strong> - The domain/category of the question</li>
+                    </ul>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Questions that already exist in the selected package will be skipped.
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-plus me-2"></i>Create New Test Package
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('create_package') }}">
+                        <div class="mb-3">
+                            <label for="title" class="form-label">Package Title</label>
+                            <input type="text" class="form-control" id="title" name="title" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea class="form-control" id="description" name="description" rows="3" required></textarea>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="price" class="form-label">Price ($)</label>
+                            <input type="number" class="form-control" id="price" name="price" step="0.01" min="0" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="domain" class="form-label">Domain</label>
+                            <select class="form-select" id="domain" name="domain" required>
+                                <option value="">Choose domain...</option>
+                                <option value="Cloud Computing">Cloud Computing</option>
+                                <option value="Cybersecurity">Cybersecurity</option>
+                                <option value="Networking">Networking</option>
+                                <option value="Project Management">Project Management</option>
+                                <option value="Data Analytics">Data Analytics</option>
+                                <option value="DevOps">DevOps</option>
+                                <option value="AI/ML">AI/ML</option>
+                            </select>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-success w-100">
+                            <i class="fas fa-plus me-2"></i>Create Package
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-cog me-2"></i>Manage Existing Packages
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if test_packages %}
+                        <div class="list-group list-group-flush">
+                            {% for package in test_packages %}
+                            <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                <div>
+                                    <h6 class="mb-1">{{ package.title }}</h6>
+                                    <small class="text-muted">{{ package.questions|length }} questions</small>
+                                </div>
+                                <a href="{{ url_for('manage_questions', package_id=package.id) }}" 
+                                   class="btn btn-outline-primary btn-sm">
+                                    <i class="fas fa-edit"></i> Manage
+                                </a>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-muted">No test packages available. Create one above to get started.</p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-info-circle me-2"></i>Image Support
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <p class="small">Questions can include images! Use this format in your CSV:</p>
+                    <code class="small">IMAGE: filename.png</code>
+                    <p class="small mt-2">Upload your images to <code>/static/images/questions/</code> folder before importing.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

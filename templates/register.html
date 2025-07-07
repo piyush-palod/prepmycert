@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Register - PrepMyCert{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-6 col-md-8">
+            <div class="card shadow-lg border-0 rounded-lg mt-5">
+                <div class="card-header bg-primary text-white text-center">
+                    <h3 class="font-weight-light my-4">
+                        <i class="fas fa-user-plus me-2"></i>Create Account
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <div class="row gx-3 mb-3">
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input class="form-control" id="first_name" name="first_name" type="text" placeholder="Enter your first name" required>
+                                    <label for="first_name">First name</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input class="form-control" id="last_name" name="last_name" type="text" placeholder="Enter your last name" required>
+                                    <label for="last_name">Last name</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-floating mb-3">
+                            <input class="form-control" id="email" name="email" type="email" placeholder="name@example.com" required>
+                            <label for="email">Email address</label>
+                        </div>
+                        <div class="form-floating mb-3">
+                            <input class="form-control" id="password" name="password" type="password" placeholder="Create a password" required minlength="6">
+                            <label for="password">Password</label>
+                        </div>
+                        <div class="d-grid">
+                            <button class="btn btn-primary btn-lg" type="submit">
+                                <i class="fas fa-user-plus me-2"></i>Create Account
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                <div class="card-footer text-center py-3">
+                    <div class="small">
+                        <span class="text-muted">Already have an account?</span>
+                        <a href="{{ url_for('login') }}" class="text-primary">Login here!</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
