@@ -1,5 +1,5 @@
 modules = ["web", "python-3.11", "nodejs-20"]
-run = "Run main.py"
+run = "python main.py"
 
 [nix]
 channel = "stable-24_05"
@@ -10,7 +10,7 @@ localPort = 5000
 externalPort = 80
 
 [deployment]
-run = ["sh", "-c", "Run main.py"]
+run = ["sh", "-c", "python main.py"]
 
 [workflows]
 runButton = "Run Flask App"
