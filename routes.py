@@ -242,7 +242,7 @@ def take_test(package_id):
         
         questions_data.append({
             'id': question.id,
-            'text': question.question_text,
+            'text': process_text_with_images(question.question_text),
             'type': question.question_type,
             'domain': question.domain,
             'options': options_data

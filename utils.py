@@ -16,7 +16,7 @@ def process_text_with_images(text):
     text = str(text)
     
     # Pattern to match IMAGE: references with or without square brackets
-    image_pattern = r'\[?IMAGE:\s*([^\s\]]+\.(png|jpg|jpeg|gif|svg))\]?'
+    image_pattern = r'\[?IMAGE:\s*([^\s\[\]]+\.(png|jpg|jpeg|gif|svg))\]?'
     
     def replace_image(match):
         image_filename = match.group(1)
