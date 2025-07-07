@@ -130,10 +130,14 @@ def create_tests_from_questions(package_id, questions_per_test=50):
     if not questions:
         raise ValueError("No questions found for this package")
 
-    # Delete existing tests for this package
+    # Delete existing tests and their test_questions for this package
     existing_tests = Test.query.filter_by(test_package_id=package_id).all()
     for test in existing_tests:
+        # Delete TestQuestion entries first due to foreign key constraints
+        TestQuestion.query.filter_by(test_id=test.id).delete()
         db.session.delete(test)
+    
+    db.session.commit()  # Commit the deletions first
 
     # Calculate number of tests needed
     total_questions = len(questions)
@@ -143,21 +147,23 @@ def create_tests_from_questions(package_id, questions_per_test=50):
     question_index = 0
 
     for test_num in range(num_tests):
+        # Determine how many questions for this test
+        questions_in_this_test = min(questions_per_test, total_questions - question_index)
+        
         # Create test
         test = Test(
             test_package_id=package_id,
             title=f"Practice Test {test_num + 1}",
-            description=f"Test {test_num + 1} of {num_tests} - {min(questions_per_test, total_questions - question_index)} questions",
+            description=f"Test {test_num + 1} of {num_tests} - {questions_in_this_test} questions",
             test_order=test_num + 1,
-            questions_per_test=min(questions_per_test, total_questions - question_index),
-            is_active=True  # Explicitly set tests as active
+            questions_per_test=questions_in_this_test,
+            is_active=True
         )
         db.session.add(test)
         db.session.flush()  # Get the test ID
 
         # Add questions to this test
-        questions_in_this_test = 0
-        for i in range(questions_per_test):
+        for i in range(questions_in_this_test):
             if question_index >= total_questions:
                 break
 
@@ -168,7 +174,6 @@ def create_tests_from_questions(package_id, questions_per_test=50):
             )
             db.session.add(test_question)
             question_index += 1
-            questions_in_this_test += 1
 
         tests_created += 1
 

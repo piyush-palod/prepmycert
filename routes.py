@@ -227,6 +227,11 @@ def take_test(package_id, test_id):
         flash('Invalid test for this package.', 'error')
         return redirect(url_for('package_detail', package_id=package_id))
     
+    # Check if test is active
+    if not test.is_active:
+        flash('This test is currently not available.', 'warning')
+        return redirect(url_for('package_detail', package_id=package_id))
+    
     # Get test questions
     test_questions = db.session.query(TestQuestion, Question).join(
         Question, TestQuestion.question_id == Question.id
@@ -235,7 +240,12 @@ def take_test(package_id, test_id):
     ).order_by(TestQuestion.question_order).all()
     
     if not test_questions:
-        flash('This test does not have any questions yet.', 'warning')
+        # Check if there are questions in the package at all
+        package_questions = Question.query.filter_by(test_package_id=package_id).count()
+        if package_questions == 0:
+            flash('This package does not have any questions yet. Please contact support.', 'warning')
+        else:
+            flash('This test does not have any questions assigned yet. Tests may need to be regenerated.', 'warning')
         return redirect(url_for('package_detail', package_id=package_id))
     
     # Convert questions to serializable format
