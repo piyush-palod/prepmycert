@@ -1,0 +1,13 @@
+modules = ["web", "python-3.11", "nodejs-20"]
+run = "Run main.py"
+
+[nix]
+channel = "stable-24_05"
+packages = ["glibcLocales"]
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[deployment]
+run = ["sh", "-c", "Run main.py"]
