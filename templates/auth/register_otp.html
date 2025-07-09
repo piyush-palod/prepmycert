@@ -14,13 +14,12 @@
                     </h3>
                 </div>
                 <div class="card-body">
-                    <div class="alert alert-info">
+                    <div class="alert alert-info d-flex align-items-center mb-4">
                         <i class="fas fa-info-circle me-2"></i>
-                        We'll send you an email verification code after registration.
+                        <div>We'll send you an email verification code after registration.</div>
                     </div>
                     
                     <form method="POST">
-                        {{ csrf_token() }}
                         <div class="row gx-3 mb-3">
                             <div class="col-md-6">
                                 <div class="form-floating">
@@ -45,13 +44,14 @@
                         </div>
                         
                         <div class="form-floating mb-3">
-                            <input class="form-control" id="password" name="password" 
-                                   type="password" placeholder="Create a password" 
-                                   minlength="6">
+                            <input class="form-control" id="password" name="password" type="password" 
+                                   placeholder="Create a password (optional)">
                             <label for="password">Password (optional - you can use OTP only)</label>
-                            <div class="form-text">
-                                Password is optional. You can log in with OTP only if you prefer.
-                            </div>
+                        </div>
+                        
+                        <div class="alert alert-light small mb-3">
+                            <i class="fas fa-lightbulb text-warning me-2"></i>
+                            <strong>Password is optional.</strong> You can log in with OTP only if you prefer.
                         </div>
                         
                         <div class="d-grid">
@@ -63,8 +63,9 @@
                 </div>
                 <div class="card-footer text-center py-3">
                     <div class="small">
-                        <a href="{{ url_for('request_otp') }}">
-                            <i class="fas fa-sign-in-alt me-1"></i>Have an account? Sign in!
+                        <span class="text-muted">Already have an account?</span>
+                        <a href="{{ url_for('request_otp') }}" class="text-primary">
+                            <i class="fas fa-sign-in-alt me-1"></i>Sign in!
                         </a>
                     </div>
                 </div>

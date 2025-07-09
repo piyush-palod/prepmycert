@@ -1,7 +1,7 @@
 
 {% extends "base.html" %}
 
-{% block title %}Enter OTP - PrepMyCert{% endblock %}
+{% block title %}Verify OTP - PrepMyCert{% endblock %}
 
 {% block content %}
 <div class="container">
@@ -10,45 +10,44 @@
             <div class="card shadow-lg border-0 rounded-lg mt-5">
                 <div class="card-header bg-success text-white text-center">
                     <h3 class="font-weight-light my-4">
-                        <i class="fas fa-shield-alt me-2"></i>Enter OTP Code
+                        <i class="fas fa-shield-alt me-2"></i>Verify OTP
                     </h3>
                 </div>
                 <div class="card-body">
-                    <div class="alert alert-info">
+                    <div class="alert alert-info d-flex align-items-center mb-4">
                         <i class="fas fa-envelope me-2"></i>
-                        We've sent a 6-digit code to your email. Enter it below to complete login.
-                        <br><small class="text-muted">Code expires in 10 minutes.</small>
+                        <div>Please enter the 6-digit code sent to your email.</div>
                     </div>
                     
                     <form method="POST">
-                        {{ csrf_token() }}
                         <div class="form-floating mb-3">
                             <input class="form-control text-center" id="otp_code" name="otp_code" 
-                                   type="text" pattern="[0-9]{6}" maxlength="6" 
-                                   placeholder="000000" required autofocus>
+                                   type="text" placeholder="000000" maxlength="6" 
+                                   pattern="[0-9]{6}" required autocomplete="off">
                             <label for="otp_code">6-Digit OTP Code</label>
                         </div>
                         
-                        <div class="d-grid mb-3">
+                        <div class="d-grid">
                             <button class="btn btn-success btn-lg" type="submit">
-                                <i class="fas fa-sign-in-alt me-2"></i>Verify & Login
+                                <i class="fas fa-check me-2"></i>Verify & Login
                             </button>
                         </div>
                     </form>
                     
-                    <div class="text-center">
-                        <form method="POST" action="{{ url_for('resend_otp') }}" class="d-inline">
-                            {{ csrf_token() }}
-                            <input type="hidden" name="purpose" value="login">
-                            <button type="submit" class="btn btn-link p-0">
-                                <i class="fas fa-redo me-1"></i>Resend OTP
+                    <hr class="my-4">
+                    
+                    <form method="POST" action="{{ url_for('resend_otp') }}">
+                        <input type="hidden" name="purpose" value="login">
+                        <div class="text-center">
+                            <button type="submit" class="btn btn-outline-secondary">
+                                <i class="fas fa-redo me-2"></i>Resend OTP
                             </button>
-                        </form>
-                    </div>
+                        </div>
+                    </form>
                 </div>
                 <div class="card-footer text-center py-3">
                     <div class="small">
-                        <a href="{{ url_for('request_otp') }}">
+                        <a href="{{ url_for('request_otp') }}" class="text-muted">
                             <i class="fas fa-arrow-left me-1"></i>Back to Login
                         </a>
                     </div>
@@ -59,20 +58,16 @@
 </div>
 
 <script>
-// Auto-format OTP input
-document.getElementById('otp_code').addEventListener('input', function(e) {
-    let value = e.target.value.replace(/\D/g, '');
-    if (value.length <= 6) {
-        e.target.value = value;
-    }
-});
-
-// Auto-submit when 6 digits are entered
-document.getElementById('otp_code').addEventListener('input', function(e) {
-    if (e.target.value.length === 6) {
-        setTimeout(() => {
-            e.target.closest('form').submit();
-        }, 500);
+// Auto-focus on OTP input and format it
+document.addEventListener('DOMContentLoaded', function() {
+    const otpInput = document.getElementById('otp_code');
+    if (otpInput) {
+        otpInput.focus();
+        
+        // Only allow numbers
+        otpInput.addEventListener('input', function(e) {
+            this.value = this.value.replace(/[^0-9]/g, '');
+        });
     }
 });
 </script>
