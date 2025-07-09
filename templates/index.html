@@ -13,7 +13,7 @@
                 </p>
                 <div class="d-flex gap-3">
                     <a href="{{ url_for('test_packages') }}" class="btn btn-success btn-lg">
-                        <i class="fas fa-rocket me-2"></i>Browse Test Packages
+                        <i class="fas fa-rocket me-2"></i>Browse Certifications
                     </a>
                     {% if not current_user.is_authenticated %}
                         <a href="{{ url_for('register') }}" class="btn btn-outline-white btn-lg">
@@ -87,7 +87,7 @@
     {% if test_packages %}
     <section class="mb-5">
         <div class="text-center mb-5">
-            <h2 class="display-5 fw-bold text-primary">Popular Test Packages</h2>
+            <h2 class="display-5 fw-bold text-primary">Popular Certifications</h2>
             <p class="lead text-muted">Start your certification journey today</p>
         </div>
         
