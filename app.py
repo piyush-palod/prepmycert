@@ -3,6 +3,7 @@ import logging
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
+from flask_wtf.csrf import CSRFProtect
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -14,7 +15,7 @@ class Base(DeclarativeBase):
 
 # Initialize Flask app
 app = Flask(__name__)
-app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-change-in-production")
+app.secret_key = os.environ.get("SESSION_SECRET") or os.urandom(24)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 # Stripe configuration
@@ -32,6 +33,9 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 # Initialize extensions
 db = SQLAlchemy(model_class=Base)
 db.init_app(app)
+
+# Initialize CSRF protection
+csrf = CSRFProtect(app)
 
 # Initialize Flask-Login
 login_manager = LoginManager()

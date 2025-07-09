@@ -696,6 +696,15 @@ def upload_image(package_id):
         return redirect(request.referrer)
     
     if file and allowed_file(file.filename):
+        # Check file size (limit to 5MB)
+        file.seek(0, 2)  # Seek to end of file
+        file_size = file.tell()
+        file.seek(0)  # Reset file pointer
+        
+        if file_size > 5 * 1024 * 1024:  # 5MB limit
+            flash('File size too large. Maximum size is 5MB.', 'error')
+            return redirect(request.referrer)
+        
         filename = secure_filename(file.filename)
         safe_package_name = re.sub(r'[^a-zA-Z0-9\-_]', '_', package.title.lower().replace(' ', '_'))
         package_image_dir = os.path.join('static', 'images', 'questions', safe_package_name)
@@ -711,8 +720,10 @@ def upload_image(package_id):
     return redirect(request.referrer)
 
 def allowed_file(filename):
+    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
     return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in {'png', 'jpg', 'jpeg', 'gif', 'svg'}
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS and \
+           len(filename) < 255
 
 @app.errorhandler(404)
 def not_found_error(error):
