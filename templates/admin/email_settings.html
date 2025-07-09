@@ -91,16 +91,39 @@
                     
                     <hr>
                     
+                    <h5>Email Configuration Status</h5>
+                    {% if email_configured %}
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle me-2"></i>
+                            <strong>Email system is configured and ready!</strong>
+                            <br>
+                            <small>Configuration test: {{ config_test[1] }}</small>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Email system is not configured.</strong>
+                            <br>
+                            <small>{{ config_test[1] if config_test else 'Missing email configuration' }}</small>
+                        </div>
+                    {% endif %}
+                    
                     <h5>Environment Variables Required</h5>
-                    <div class="alert alert-warning">
+                    <div class="alert alert-info">
                         <p><strong>To enable email functionality, set these environment variables:</strong></p>
                         <ul class="mb-0">
-                            <li><code>MAIL_SERVER</code> - SMTP server (e.g., smtp.gmail.com)</li>
-                            <li><code>MAIL_PORT</code> - SMTP port (default: 587)</li>
-                            <li><code>MAIL_USERNAME</code> - Email username</li>
-                            <li><code>MAIL_PASSWORD</code> - Email password or app password</li>
-                            <li><code>MAIL_USE_TLS</code> - Use TLS (default: True)</li>
-                            <li><code>MAIL_DEFAULT_SENDER</code> - Default sender email</li>
+                            <li><code>MAIL_SERVER</code> - SMTP server (e.g., smtp.gmail.com) 
+                                {% if config.MAIL_SERVER %}<span class="text-success">✓</span>{% else %}<span class="text-danger">✗</span>{% endif %}</li>
+                            <li><code>MAIL_PORT</code> - SMTP port (default: 587) 
+                                {% if config.MAIL_PORT %}<span class="text-success">✓</span>{% else %}<span class="text-danger">✗</span>{% endif %}</li>
+                            <li><code>MAIL_USERNAME</code> - Email username 
+                                {% if config.MAIL_USERNAME %}<span class="text-success">✓</span>{% else %}<span class="text-danger">✗</span>{% endif %}</li>
+                            <li><code>MAIL_PASSWORD</code> - Email password or app password 
+                                {% if config.MAIL_PASSWORD %}<span class="text-success">✓</span>{% else %}<span class="text-danger">✗</span>{% endif %}</li>
+                            <li><code>MAIL_USE_TLS</code> - Use TLS (default: True) 
+                                {% if config.MAIL_USE_TLS %}<span class="text-success">✓</span>{% else %}<span class="text-warning">default</span>{% endif %}</li>
+                            <li><code>MAIL_DEFAULT_SENDER</code> - Default sender email 
+                                {% if config.MAIL_DEFAULT_SENDER %}<span class="text-success">✓</span>{% else %}<span class="text-warning">using username</span>{% endif %}</li>
                         </ul>
                     </div>
                     

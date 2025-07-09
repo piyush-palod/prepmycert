@@ -4,7 +4,7 @@ from flask import render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from app import app, db
 from models import OTPToken, User
-from email_service import send_notification_email
+from email_service import send_notification_email, is_email_configured, test_email_configuration
 
 @app.route('/admin/email-settings')
 @login_required
@@ -31,9 +31,15 @@ def admin_email_settings():
         ).count(),
     }
     
+    # Check email configuration status
+    email_configured = is_email_configured()
+    config_test_result = test_email_configuration()
+    
     return render_template('admin/email_settings.html', 
                          otp_stats=otp_stats,
-                         config=app.config)
+                         config=app.config,
+                         email_configured=email_configured,
+                         config_test=config_test_result)
 
 @app.route('/admin/test-email', methods=['POST'])
 @login_required
@@ -46,6 +52,11 @@ def test_email_system():
     test_email = request.form.get('test_email')
     if not test_email:
         flash('Test email is required.', 'error')
+        return redirect(url_for('admin_email_settings'))
+    
+    # Check if email is configured first
+    if not is_email_configured():
+        flash('Email system is not configured. Please set up email environment variables.', 'error')
         return redirect(url_for('admin_email_settings'))
     
     # Send test email
@@ -71,7 +82,7 @@ PrepMyCert System
     if success:
         flash(f'Test email sent successfully to {test_email}!', 'success')
     else:
-        flash('Failed to send test email. Please check email configuration.', 'error')
+        flash('Failed to send test email. Please check email configuration and logs.', 'error')
     
     return redirect(url_for('admin_email_settings'))
 
@@ -86,6 +97,31 @@ def cleanup_otp_tokens():
     cleaned_count = OTPToken.cleanup_expired_tokens()
     flash(f'Cleaned up {cleaned_count} expired OTP tokens.', 'success')
     
+
+
+@app.route('/admin/check-email-config', methods=['GET'])
+@login_required
+def check_email_config():
+    """Check current email configuration"""
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    config_status = {
+        'configured': is_email_configured(),
+        'test_result': test_email_configuration(),
+        'settings': {
+            'MAIL_SERVER': app.config.get('MAIL_SERVER', 'Not set'),
+            'MAIL_PORT': app.config.get('MAIL_PORT', 'Not set'),
+            'MAIL_USERNAME': '***' if app.config.get('MAIL_USERNAME') else 'Not set',
+            'MAIL_PASSWORD': '***' if app.config.get('MAIL_PASSWORD') else 'Not set',
+            'MAIL_USE_TLS': app.config.get('MAIL_USE_TLS', 'Not set'),
+            'MAIL_DEFAULT_SENDER': app.config.get('MAIL_DEFAULT_SENDER', 'Not set')
+        }
+    }
+    
+    return jsonify(config_status)
+
     return redirect(url_for('admin_email_settings'))
 
 @app.route('/admin/user-stats')

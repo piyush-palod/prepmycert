@@ -58,6 +58,10 @@ def load_user(user_id):
     from models import User
     return User.query.get(int(user_id))
 
+# Initialize email service
+from email_service import init_mail
+init_mail(app)
+
 # Create tables and setup initial admin
 with app.app_context():
     import models  # noqa: F401
