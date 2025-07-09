@@ -1,28 +1,97 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from app import db
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
+import pyotp
+import secrets
 
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
     
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False, index=True)
-    password_hash = db.Column(db.String(256), nullable=False)
+    password_hash = db.Column(db.String(256), nullable=True)  # Made nullable for OTP-only users
     first_name = db.Column(db.String(50), nullable=False)
     last_name = db.Column(db.String(50), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
+    is_email_verified = db.Column(db.Boolean, default=False)
+    otp_secret = db.Column(db.String(32), nullable=True)  # For TOTP
+    last_login_attempt = db.Column(db.DateTime, nullable=True)
+    login_attempts = db.Column(db.Integer, default=0)
+    is_locked = db.Column(db.Boolean, default=False)
+    locked_until = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationships
     purchases = db.relationship('UserPurchase', backref='user', lazy=True)
     test_attempts = db.relationship('TestAttempt', backref='user', lazy=True)
+    otp_tokens = db.relationship('OTPToken', backref='user', lazy=True, cascade='all, delete-orphan')
     
     def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
+        if password:
+            self.password_hash = generate_password_hash(password)
     
     def check_password(self, password):
+        if not self.password_hash:
+            return False
         return check_password_hash(self.password_hash, password)
+    
+    def generate_otp_secret(self):
+        """Generate a new OTP secret for the user"""
+        self.otp_secret = pyotp.random_base32()
+        return self.otp_secret
+    
+    def get_totp_uri(self):
+        """Get TOTP URI for QR code generation"""
+        if not self.otp_secret:
+            self.generate_otp_secret()
+        
+        totp = pyotp.TOTP(self.otp_secret)
+        return totp.provisioning_uri(
+            name=self.email,
+            issuer_name="PrepMyCert"
+        )
+    
+    def verify_totp(self, token):
+        """Verify TOTP token"""
+        if not self.otp_secret:
+            return False
+        
+        totp = pyotp.TOTP(self.otp_secret)
+        return totp.verify(token, valid_window=1)
+    
+    def is_account_locked(self):
+        """Check if account is locked due to too many failed attempts"""
+        if self.is_locked and self.locked_until:
+            if datetime.utcnow() < self.locked_until:
+                return True
+            else:
+                # Unlock account if lock period has expired
+                self.is_locked = False
+                self.locked_until = None
+                self.login_attempts = 0
+                db.session.commit()
+        return False
+    
+    def increment_login_attempts(self):
+        """Increment failed login attempts and lock account if necessary"""
+        self.login_attempts += 1
+        self.last_login_attempt = datetime.utcnow()
+        
+        # Lock account after 5 failed attempts for 30 minutes
+        if self.login_attempts >= 5:
+            self.is_locked = True
+            self.locked_until = datetime.utcnow() + timedelta(minutes=30)
+        
+        db.session.commit()
+    
+    def reset_login_attempts(self):
+        """Reset login attempts after successful login"""
+        self.login_attempts = 0
+        self.last_login_attempt = datetime.utcnow()
+        self.is_locked = False
+        self.locked_until = None
+        db.session.commit()
     
     @property
     def full_name(self):
@@ -112,3 +181,60 @@ class UserAnswer(db.Model):
     
     # Relationships
     selected_option = db.relationship('AnswerOption', lazy=True)
+
+class OTPToken(db.Model):
+    __tablename__ = 'otp_tokens'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    token = db.Column(db.String(6), nullable=False, index=True)
+    purpose = db.Column(db.String(20), nullable=False)  # 'login', 'password_reset', 'verification'
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    is_used = db.Column(db.Boolean, default=False)
+    attempts = db.Column(db.Integer, default=0)
+    ip_address = db.Column(db.String(45), nullable=True)
+    
+    def __init__(self, user_id, purpose, duration_minutes=10, ip_address=None):
+        self.user_id = user_id
+        self.purpose = purpose
+        self.token = self.generate_token()
+        self.expires_at = datetime.utcnow() + timedelta(minutes=duration_minutes)
+        self.ip_address = ip_address
+    
+    @staticmethod
+    def generate_token():
+        """Generate a 6-digit OTP token"""
+        return f"{secrets.randbelow(1000000):06d}"
+    
+    def is_expired(self):
+        """Check if token has expired"""
+        return datetime.utcnow() > self.expires_at
+    
+    def is_valid(self):
+        """Check if token is valid (not expired, not used, not too many attempts)"""
+        return not self.is_expired() and not self.is_used and self.attempts < 3
+    
+    def verify_token(self, provided_token):
+        """Verify the provided token against this OTP"""
+        self.attempts += 1
+        db.session.commit()
+        
+        if not self.is_valid():
+            return False
+        
+        if self.token == provided_token:
+            self.is_used = True
+            db.session.commit()
+            return True
+        
+        return False
+    
+    @classmethod
+    def cleanup_expired_tokens(cls):
+        """Remove expired tokens from database"""
+        expired_tokens = cls.query.filter(cls.expires_at < datetime.utcnow()).all()
+        for token in expired_tokens:
+            db.session.delete(token)
+        db.session.commit()
+        return len(expired_tokens)

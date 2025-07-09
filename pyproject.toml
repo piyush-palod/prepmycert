@@ -19,4 +19,7 @@ dependencies = [
     "sqlalchemy>=2.0.41",
     "flask-limiter>=3.12",
     "flask-wtf>=1.2.2",
+    "flask-mail>=0.10.0",
+    "pyotp>=2.9.0",
+    "qrcode>=8.2",
 ]

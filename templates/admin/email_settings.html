@@ -1,0 +1,136 @@
+
+{% extends "base.html" %}
+
+{% block title %}Email Settings - Admin - PrepMyCert{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-cogs me-2"></i>Admin Panel</h5>
+                </div>
+                <div class="list-group list-group-flush">
+                    <a href="{{ url_for('admin_packages') }}" class="list-group-item list-group-item-action">
+                        <i class="fas fa-box me-2"></i>Test Packages
+                    </a>
+                    <a href="{{ url_for('admin_users') }}" class="list-group-item list-group-item-action">
+                        <i class="fas fa-users me-2"></i>Users
+                    </a>
+                    <a href="{{ url_for('import_questions') }}" class="list-group-item list-group-item-action">
+                        <i class="fas fa-upload me-2"></i>Import Questions
+                    </a>
+                    <a href="{{ url_for('admin_email_settings') }}" class="list-group-item list-group-item-action active">
+                        <i class="fas fa-envelope-open-text me-2"></i>Email Settings
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-9">
+            <div class="card">
+                <div class="card-header">
+                    <h3><i class="fas fa-envelope-open-text me-2"></i>Email System Status</h3>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5>Configuration Status</h5>
+                            <ul class="list-group">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Mail Server
+                                    {% if config.MAIL_SERVER %}
+                                        <span class="badge bg-success rounded-pill">
+                                            <i class="fas fa-check"></i> Configured
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-danger rounded-pill">
+                                            <i class="fas fa-times"></i> Not Set
+                                        </span>
+                                    {% endif %}
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Mail Username
+                                    {% if config.MAIL_USERNAME %}
+                                        <span class="badge bg-success rounded-pill">
+                                            <i class="fas fa-check"></i> Configured
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-danger rounded-pill">
+                                            <i class="fas fa-times"></i> Not Set
+                                        </span>
+                                    {% endif %}
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Mail Password
+                                    {% if config.MAIL_PASSWORD %}
+                                        <span class="badge bg-success rounded-pill">
+                                            <i class="fas fa-check"></i> Configured
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-danger rounded-pill">
+                                            <i class="fas fa-times"></i> Not Set
+                                        </span>
+                                    {% endif %}
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h5>Email Statistics</h5>
+                            <div class="alert alert-info">
+                                <h6>OTP Tokens (Last 24 Hours)</h6>
+                                <ul class="mb-0">
+                                    <li>Login OTPs: {{ otp_stats.login }}</li>
+                                    <li>Registration OTPs: {{ otp_stats.verification }}</li>
+                                    <li>Password Reset OTPs: {{ otp_stats.password_reset }}</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <h5>Environment Variables Required</h5>
+                    <div class="alert alert-warning">
+                        <p><strong>To enable email functionality, set these environment variables:</strong></p>
+                        <ul class="mb-0">
+                            <li><code>MAIL_SERVER</code> - SMTP server (e.g., smtp.gmail.com)</li>
+                            <li><code>MAIL_PORT</code> - SMTP port (default: 587)</li>
+                            <li><code>MAIL_USERNAME</code> - Email username</li>
+                            <li><code>MAIL_PASSWORD</code> - Email password or app password</li>
+                            <li><code>MAIL_USE_TLS</code> - Use TLS (default: True)</li>
+                            <li><code>MAIL_DEFAULT_SENDER</code> - Default sender email</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="row mt-4">
+                        <div class="col-md-6">
+                            <h6>Test Email System</h6>
+                            <form method="POST" action="{{ url_for('test_email_system') }}">
+                                {{ csrf_token() }}
+                                <div class="input-group">
+                                    <input type="email" class="form-control" name="test_email" 
+                                           placeholder="Enter test email" required>
+                                    <button class="btn btn-primary" type="submit">
+                                        <i class="fas fa-paper-plane me-1"></i>Send Test
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Cleanup Old Tokens</h6>
+                            <form method="POST" action="{{ url_for('cleanup_otp_tokens') }}">
+                                {{ csrf_token() }}
+                                <button class="btn btn-warning" type="submit">
+                                    <i class="fas fa-trash me-1"></i>Cleanup Expired OTPs
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

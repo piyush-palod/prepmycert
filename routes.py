@@ -23,51 +23,16 @@ def index():
     test_packages = TestPackage.query.filter_by(is_active=True).all()
     return render_template('index.html', test_packages=test_packages)
 
+# Legacy routes - redirect to new OTP-based authentication
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    if request.method == 'POST':
-        email = request.form['email']
-        password = request.form['password']
-        first_name = request.form['first_name']
-        last_name = request.form['last_name']
-        
-        # Check if user already exists
-        if User.query.filter_by(email=email).first():
-            flash('Email already registered. Please use a different email.', 'error')
-            return render_template('register.html')
-        
-        # Create new user
-        user = User(
-            email=email,
-            first_name=first_name,
-            last_name=last_name
-        )
-        user.set_password(password)
-        
-        db.session.add(user)
-        db.session.commit()
-        
-        flash('Registration successful! Please log in.', 'success')
-        return redirect(url_for('login'))
-    
-    return render_template('register.html')
+    flash('Please use our new secure registration system.', 'info')
+    return redirect(url_for('register_otp'))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method == 'POST':
-        email = request.form['email']
-        password = request.form['password']
-        
-        user = User.query.filter_by(email=email).first()
-        
-        if user and user.check_password(password):
-            login_user(user)
-            next_page = request.args.get('next')
-            return redirect(next_page) if next_page else redirect(url_for('dashboard'))
-        else:
-            flash('Invalid email or password.', 'error')
-    
-    return render_template('login.html')
+    flash('Please use our new secure login system.', 'info')
+    return redirect(url_for('request_otp'))
 
 @app.route('/logout')
 @login_required
@@ -196,6 +161,14 @@ def payment_success():
                 )
                 db.session.add(purchase)
                 db.session.commit()
+                
+                # Send purchase confirmation email
+                from email_service import send_purchase_confirmation_email
+                send_purchase_confirmation_email(
+                    current_user.email, 
+                    package.title, 
+                    session.amount_total / 100
+                )
                 
                 flash(f'Payment successful! You now have lifetime access to {package.title}.', 'success')
             else:

@@ -189,6 +189,19 @@ wheels = [
 ]
 
 [[package]]
+name = "flask-mail"
+version = "0.10.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "blinker" },
+    { name = "flask" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ba/29/e92dc84c675d1e8d260d5768eb3fb65c70cbd33addecf424187587bee862/flask_mail-0.10.0.tar.gz", hash = "sha256:44083e7b02bbcce792209c06252f8569dd5a325a7aaa76afe7330422bd97881d", size = 8152 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e4/c0/a81083da779f482494d49195d8b6c9fde21072558253e4a9fb2ec969c3c1/flask_mail-0.10.0-py3-none-any.whl", hash = "sha256:a451e490931bb3441d9b11ebab6812a16bfa81855792ae1bf9c1e1e22c4e51e7", size = 8529 },
+]
+
+[[package]]
 name = "flask-sqlalchemy"
 version = "3.1.1"
 source = { registry = "https://pypi.org/simple" }
@@ -570,6 +583,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pyotp"
+version = "2.9.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f3/b2/1d5994ba2acde054a443bd5e2d384175449c7d2b6d1a0614dbca3a63abfc/pyotp-2.9.0.tar.gz", hash = "sha256:346b6642e0dbdde3b4ff5a930b664ca82abfa116356ed48cc42c7d6590d36f63", size = 17763 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c3/c0/c33c8792c3e50193ef55adb95c1c3c2786fe281123291c2dbf0eaab95a6f/pyotp-2.9.0-py3-none-any.whl", hash = "sha256:81c2e5865b8ac55e825b0358e496e1d9387c811e85bb40e71a3b29b288963612", size = 13376 },
+]
+
+[[package]]
 name = "python-dateutil"
 version = "2.9.0.post0"
 source = { registry = "https://pypi.org/simple" }
@@ -591,6 +613,18 @@ wheels = [
 ]
 
 [[package]]
+name = "qrcode"
+version = "8.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8f/b2/7fc2931bfae0af02d5f53b174e9cf701adbb35f39d69c2af63d4a39f81a9/qrcode-8.2.tar.gz", hash = "sha256:35c3f2a4172b33136ab9f6b3ef1c00260dd2f66f858f24d88418a015f446506c", size = 43317 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/dd/b8/d2d6d731733f51684bbf76bf34dab3b70a9148e8f2cef2bb544fccec681a/qrcode-8.2-py3-none-any.whl", hash = "sha256:16e64e0716c14960108e85d853062c9e8bba5ca8252c0b4d0231b9df4060ff4f", size = 45986 },
+]
+
+[[package]]
 name = "repl-nix-workspace"
 version = "0.1.0"
 source = { virtual = "." }
@@ -600,6 +634,7 @@ dependencies = [
     { name = "flask-dance" },
     { name = "flask-limiter" },
     { name = "flask-login" },
+    { name = "flask-mail" },
     { name = "flask-sqlalchemy" },
     { name = "flask-wtf" },
     { name = "gunicorn" },
@@ -607,6 +642,8 @@ dependencies = [
     { name = "pandas" },
     { name = "psycopg2-binary" },
     { name = "pyjwt" },
+    { name = "pyotp" },
+    { name = "qrcode" },
     { name = "sqlalchemy" },
     { name = "stripe" },
     { name = "werkzeug" },
@@ -619,6 +656,7 @@ requires-dist = [
     { name = "flask-dance", specifier = ">=7.1.0" },
     { name = "flask-limiter", specifier = ">=3.12" },
     { name = "flask-login", specifier = ">=0.6.3" },
+    { name = "flask-mail", specifier = ">=0.10.0" },
     { name = "flask-sqlalchemy", specifier = ">=3.1.1" },
     { name = "flask-wtf", specifier = ">=1.2.2" },
     { name = "gunicorn", specifier = ">=23.0.0" },
@@ -626,6 +664,8 @@ requires-dist = [
     { name = "pandas", specifier = ">=2.3.0" },
     { name = "psycopg2-binary", specifier = ">=2.9.10" },
     { name = "pyjwt", specifier = ">=2.10.1" },
+    { name = "pyotp", specifier = ">=2.9.0" },
+    { name = "qrcode", specifier = ">=8.2" },
     { name = "sqlalchemy", specifier = ">=2.0.41" },
     { name = "stripe", specifier = ">=12.3.0" },
     { name = "werkzeug", specifier = ">=3.1.3" },
