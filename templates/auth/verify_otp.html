@@ -19,7 +19,7 @@
                     </div>
 
                     <form method="POST">
-                        {{ csrf_token() }}
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <div class="form-floating mb-3">
                             <input class="form-control text-center" id="otp_code" name="otp_code" 
                                    type="text" placeholder="000000" maxlength="6" 
