@@ -41,10 +41,10 @@ csrf = CSRFProtect(app)
 
 # Initialize rate limiting
 limiter = Limiter(
-    app,
     key_func=get_remote_address,
     default_limits=["1000 per hour", "100 per minute"]
 )
+limiter.init_app(app)
 
 # Initialize Flask-Login
 login_manager = LoginManager()
