@@ -39,6 +39,15 @@ db.init_app(app)
 # Initialize CSRF protection
 csrf = CSRFProtect(app)
 
+# CSRF error handler
+@app.errorhandler(400)
+def handle_csrf_error(e):
+    from flask import render_template, request
+    if 'CSRF token missing' in str(e) or 'CSRF token' in str(e):
+        return render_template('auth/request_otp.html', 
+                             error='Security token expired. Please try again.'), 400
+    return str(e), 400
+
 # Initialize rate limiting
 limiter = Limiter(
     key_func=get_remote_address,
