@@ -1,0 +1,126 @@
+
+{% extends "base.html" %}
+
+{% block title %}Create Coupon - Admin{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0"><i class="fas fa-tags me-2"></i>Create New Coupon</h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="code" class="form-label">Coupon Code *</label>
+                                    <input type="text" class="form-control" id="code" name="code" required 
+                                           placeholder="e.g., SAVE20, WELCOME" style="text-transform: uppercase;">
+                                    <div class="form-text">Only letters, numbers, hyphens, and underscores allowed</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="discount_type" class="form-label">Discount Type *</label>
+                                    <select class="form-select" id="discount_type" name="discount_type" required>
+                                        <option value="">Select discount type</option>
+                                        <option value="percentage">Percentage</option>
+                                        <option value="fixed">Fixed Amount</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="discount_value" class="form-label">Discount Value *</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text" id="discount-prefix">$</span>
+                                        <input type="number" class="form-control" id="discount_value" name="discount_value" 
+                                               step="0.01" min="0" required>
+                                        <span class="input-group-text" id="discount-suffix" style="display: none;">%</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="minimum_purchase" class="form-label">Minimum Purchase</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        <input type="number" class="form-control" id="minimum_purchase" name="minimum_purchase" 
+                                               step="0.01" min="0" placeholder="Optional">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea class="form-control" id="description" name="description" rows="3" 
+                                      placeholder="Optional description for internal use"></textarea>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="usage_limit" class="form-label">Usage Limit</label>
+                                    <input type="number" class="form-control" id="usage_limit" name="usage_limit" 
+                                           min="1" placeholder="Leave empty for unlimited">
+                                    <div class="form-text">Maximum number of times this coupon can be used</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="valid_until" class="form-label">Valid Until</label>
+                                    <input type="date" class="form-control" id="valid_until" name="valid_until" 
+                                           min="{{ moment().utcnow().strftime('%Y-%m-%d') }}">
+                                    <div class="form-text">Leave empty for no expiry date</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('admin_coupons') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left me-1"></i>Back to Coupons
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-plus me-1"></i>Create Coupon
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('discount_type').addEventListener('change', function() {
+    const prefix = document.getElementById('discount-prefix');
+    const suffix = document.getElementById('discount-suffix');
+    const input = document.getElementById('discount_value');
+    
+    if (this.value === 'percentage') {
+        prefix.style.display = 'none';
+        suffix.style.display = 'block';
+        input.max = '100';
+        input.placeholder = 'e.g., 20 for 20%';
+    } else if (this.value === 'fixed') {
+        prefix.style.display = 'block';
+        suffix.style.display = 'none';
+        input.removeAttribute('max');
+        input.placeholder = 'e.g., 10.00';
+    }
+});
+
+document.getElementById('code').addEventListener('input', function() {
+    this.value = this.value.toUpperCase();
+});
+</script>
+{% endblock %}

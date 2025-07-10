@@ -1,0 +1,78 @@
+
+{% extends "base.html" %}
+
+{% block title %}Test Package Bundles - PrepMyCert{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="text-center mb-5">
+        <h1 class="display-4">Test Package Bundles</h1>
+        <p class="lead text-muted">Save more with our carefully curated bundle packages</p>
+    </div>
+
+    {% if bundles %}
+    <div class="row">
+        {% for bundle in bundles %}
+        <div class="col-lg-6 col-xl-4 mb-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">{{ bundle.title }}</h5>
+                    <div class="d-flex justify-content-between align-items-center mt-2">
+                        <span class="badge bg-light text-dark">{{ bundle.package_count }} Packages</span>
+                        <span class="badge bg-success">{{ "%.0f"|format(bundle.savings_percentage) }}% OFF</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">{{ bundle.description }}</p>
+                    
+                    <div class="pricing-section mb-3">
+                        <div class="row">
+                            <div class="col-6">
+                                <h4 class="text-success mb-0">${{ "%.2f"|format(bundle.price) }}</h4>
+                                <small class="text-muted">Bundle Price</small>
+                            </div>
+                            <div class="col-6 text-end">
+                                <span class="text-muted text-decoration-line-through">${{ "%.2f"|format(bundle.original_price) }}</span>
+                                <br>
+                                <small class="text-success">Save ${{ "%.2f"|format(bundle.savings) }}</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h6 class="mb-2">Included Packages:</h6>
+                    <ul class="list-unstyled">
+                        {% for bp in bundle.bundle_packages[:3] %}
+                        <li class="d-flex align-items-center mb-1">
+                            <i class="fas fa-check text-success me-2"></i>
+                            <span class="text-truncate">{{ bp.test_package.title }}</span>
+                        </li>
+                        {% endfor %}
+                        {% if bundle.package_count > 3 %}
+                        <li class="text-muted">
+                            <i class="fas fa-plus me-2"></i>
+                            {{ bundle.package_count - 3 }} more packages...
+                        </li>
+                        {% endif %}
+                    </ul>
+                </div>
+                <div class="card-footer bg-transparent">
+                    <a href="{{ url_for('view_bundle', bundle_id=bundle.id) }}" class="btn btn-primary w-100">
+                        <i class="fas fa-eye me-1"></i>View Bundle Details
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-5">
+        <i class="fas fa-box-open text-muted mb-3" style="font-size: 4rem;"></i>
+        <h3 class="text-muted">No bundles available yet</h3>
+        <p class="text-muted">Check back soon for exciting bundle offers!</p>
+        <a href="{{ url_for('test_packages') }}" class="btn btn-primary">
+            <i class="fas fa-arrow-left me-1"></i>Browse Individual Packages
+        </a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

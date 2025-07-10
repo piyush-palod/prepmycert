@@ -21,7 +21,9 @@ stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
 @app.route('/')
 def index():
     test_packages = TestPackage.query.filter_by(is_active=True).all()
-    return render_template('index.html', test_packages=test_packages)
+    from models import Bundle
+    bundles = Bundle.query.filter_by(is_active=True).limit(3).all()  # Show top 3 bundles
+    return render_template('index.html', test_packages=test_packages, bundles=bundles)
 
 # Legacy routes - redirect to new OTP-based authentication
 @app.route('/register', methods=['GET', 'POST'])
@@ -44,9 +46,24 @@ def logout():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    # Get user's purchased packages
+    # Get user's purchased packages (excluding bundle items)
     purchased_packages = db.session.query(TestPackage).join(UserPurchase).filter(
-        UserPurchase.user_id == current_user.id
+        UserPurchase.user_id == current_user.id,
+        UserPurchase.test_package_id.isnot(None),
+        UserPurchase.purchase_type != 'bundle_item'
+    ).all()
+    
+    # Get user's purchased bundles
+    from models import Bundle
+    purchased_bundles = db.session.query(Bundle).join(UserPurchase).filter(
+        UserPurchase.user_id == current_user.id,
+        UserPurchase.bundle_id.isnot(None)
+    ).all()
+    
+    # Get all accessible packages (including from bundles)
+    all_accessible_packages = db.session.query(TestPackage).join(UserPurchase).filter(
+        UserPurchase.user_id == current_user.id,
+        UserPurchase.test_package_id.isnot(None)
     ).all()
     
     # Get recent test attempts
@@ -57,12 +74,50 @@ def dashboard():
     
     return render_template('dashboard.html', 
                          purchased_packages=purchased_packages,
+                         purchased_bundles=purchased_bundles,
+                         all_accessible_packages=all_accessible_packages,
                          recent_attempts=recent_attempts)
 
 @app.route('/test-packages')
 def test_packages():
     packages = TestPackage.query.filter_by(is_active=True).all()
     return render_template('test_packages.html', packages=packages)
+
+@app.route('/bundles')
+def bundles():
+    from models import Bundle
+    bundles = Bundle.query.filter_by(is_active=True).all()
+    return render_template('bundles.html', bundles=bundles)
+
+@app.route('/bundle/<int:bundle_id>')
+def view_bundle(bundle_id):
+    from models import Bundle
+    bundle = Bundle.query.get_or_404(bundle_id)
+    
+    # Check if user has purchased this bundle or has access to all packages
+    has_bundle_access = False
+    individual_access = {}
+    
+    if current_user.is_authenticated:
+        # Check for direct bundle purchase
+        bundle_purchase = UserPurchase.query.filter_by(
+            user_id=current_user.id,
+            bundle_id=bundle_id
+        ).first()
+        has_bundle_access = bundle_purchase is not None
+        
+        # Check individual package access
+        for bp in bundle.bundle_packages:
+            package_purchase = UserPurchase.query.filter_by(
+                user_id=current_user.id,
+                test_package_id=bp.test_package_id
+            ).first()
+            individual_access[bp.test_package_id] = package_purchase is not None
+    
+    return render_template('bundle_detail.html', 
+                         bundle=bundle, 
+                         has_bundle_access=has_bundle_access,
+                         individual_access=individual_access)
 
 @app.route('/package/<int:package_id>')
 def package_detail(package_id):
@@ -83,17 +138,67 @@ def package_detail(package_id):
 @login_required
 def create_checkout_session():
     package_id = request.form.get('package_id')
-    package = TestPackage.query.get_or_404(package_id)
+    bundle_id = request.form.get('bundle_id')
+    coupon_code = request.form.get('coupon_code', '').upper().strip()
     
-    # Check if user already purchased this package
-    existing_purchase = UserPurchase.query.filter_by(
-        user_id=current_user.id,
-        test_package_id=package_id
-    ).first()
+    # Determine if it's a package or bundle purchase
+    if bundle_id:
+        from models import Bundle, BundlePackage
+        bundle = Bundle.query.get_or_404(bundle_id)
+        
+        # Check if user already has access to all packages in bundle
+        package_ids = [bp.test_package_id for bp in bundle.bundle_packages]
+        existing_purchases = UserPurchase.query.filter(
+            UserPurchase.user_id == current_user.id,
+            UserPurchase.test_package_id.in_(package_ids)
+        ).all()
+        
+        if len(existing_purchases) == len(package_ids):
+            flash('You already have access to all packages in this bundle.', 'info')
+            return redirect(url_for('view_bundle', bundle_id=bundle_id))
+        
+        item_title = bundle.title
+        item_description = bundle.description
+        original_amount = bundle.price
+        purchase_type = 'bundle'
+        
+    else:
+        package = TestPackage.query.get_or_404(package_id)
+        
+        # Check if user already purchased this package
+        existing_purchase = UserPurchase.query.filter_by(
+            user_id=current_user.id,
+            test_package_id=package_id
+        ).first()
+        
+        if existing_purchase:
+            flash('You have already purchased this package.', 'info')
+            return redirect(url_for('package_detail', package_id=package_id))
+        
+        item_title = package.title
+        item_description = package.description
+        original_amount = package.price
+        purchase_type = 'package'
     
-    if existing_purchase:
-        flash('You have already purchased this package.', 'info')
-        return redirect(url_for('package_detail', package_id=package_id))
+    # Apply coupon if provided
+    discount_amount = 0
+    final_amount = original_amount
+    coupon = None
+    
+    if coupon_code:
+        from models import Coupon
+        coupon = Coupon.query.filter_by(code=coupon_code).first()
+        if coupon:
+            is_valid, message = coupon.is_valid(current_user.id, original_amount)
+            if is_valid:
+                discount_amount = coupon.calculate_discount(original_amount)
+                final_amount = original_amount - discount_amount
+            else:
+                flash(f'Coupon error: {message}', 'error')
+                return redirect(request.referrer or url_for('index'))
+        else:
+            flash('Invalid coupon code.', 'error')
+            return redirect(request.referrer or url_for('index'))
     
     try:
         # Get domain for success/cancel URLs
@@ -101,41 +206,77 @@ def create_checkout_session():
         if not domain:
             domain = request.host
         
-        checkout_session = stripe.checkout.Session.create(
-            payment_method_types=['card'],
-            line_items=[{
+        # Create line items for checkout
+        line_items = [{
+            'price_data': {
+                'currency': 'usd',
+                'product_data': {
+                    'name': item_title,
+                    'description': item_description[:100] + '...' if len(item_description) > 100 else item_description,
+                },
+                'unit_amount': int(final_amount * 100),  # Convert to cents
+            },
+            'quantity': 1,
+        }]
+        
+        # Add discount line item if applicable
+        if discount_amount > 0:
+            line_items.append({
                 'price_data': {
                     'currency': 'usd',
                     'product_data': {
-                        'name': package.title,
-                        'description': package.description[:100] + '...' if len(package.description) > 100 else package.description,
+                        'name': f'Discount ({coupon_code})',
                     },
-                    'unit_amount': int(package.price * 100),  # Convert to cents
+                    'unit_amount': -int(discount_amount * 100),  # Negative amount for discount
                 },
                 'quantity': 1,
-            }],
+            })
+        
+        metadata = {
+            'user_id': current_user.id,
+            'purchase_type': purchase_type,
+            'original_amount': str(original_amount),
+            'discount_amount': str(discount_amount),
+        }
+        
+        if bundle_id:
+            metadata['bundle_id'] = bundle_id
+            success_url = f'https://{domain}/payment-success?session_id={{CHECKOUT_SESSION_ID}}&bundle_id={bundle_id}'
+            cancel_url = f'https://{domain}/payment-cancel?bundle_id={bundle_id}'
+        else:
+            metadata['package_id'] = package_id
+            success_url = f'https://{domain}/payment-success?session_id={{CHECKOUT_SESSION_ID}}&package_id={package_id}'
+            cancel_url = f'https://{domain}/payment-cancel?package_id={package_id}'
+        
+        if coupon_code:
+            metadata['coupon_code'] = coupon_code
+        
+        checkout_session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            line_items=line_items,
             mode='payment',
-            success_url=f'https://{domain}/payment-success?session_id={{CHECKOUT_SESSION_ID}}&package_id={package_id}',
-            cancel_url=f'https://{domain}/payment-cancel?package_id={package_id}',
-            metadata={
-                'user_id': current_user.id,
-                'package_id': package_id,
-            }
+            success_url=success_url,
+            cancel_url=cancel_url,
+            metadata=metadata
         )
         
         return redirect(checkout_session.url, code=303)
         
     except Exception as e:
         flash(f'Payment processing error: {str(e)}', 'error')
-        return redirect(url_for('package_detail', package_id=package_id))
+        if bundle_id:
+            return redirect(url_for('view_bundle', bundle_id=bundle_id))
+        else:
+            return redirect(url_for('package_detail', package_id=package_id))
 
 @app.route('/payment-success')
 @login_required
 def payment_success():
     session_id = request.args.get('session_id')
     package_id = request.args.get('package_id')
+    bundle_id = request.args.get('bundle_id')
     
-    if not session_id or not package_id:
+    if not session_id or (not package_id and not bundle_id):
         flash('Invalid payment session.', 'error')
         return redirect(url_for('dashboard'))
     
@@ -144,35 +285,139 @@ def payment_success():
         session = stripe.checkout.Session.retrieve(session_id)
         
         if session.payment_status == 'paid':
-            # Check if purchase already recorded
-            existing_purchase = UserPurchase.query.filter_by(
-                user_id=current_user.id,
-                test_package_id=package_id
-            ).first()
+            metadata = session.metadata
+            purchase_type = metadata.get('purchase_type', 'package')
+            original_amount = float(metadata.get('original_amount', 0))
+            discount_amount = float(metadata.get('discount_amount', 0))
+            coupon_code = metadata.get('coupon_code')
             
-            if not existing_purchase:
-                # Record the purchase
-                package = TestPackage.query.get(package_id)
-                purchase = UserPurchase(
+            if purchase_type == 'bundle' and bundle_id:
+                from models import Bundle, BundlePackage, Coupon, CouponUsage
+                
+                # Check if bundle purchase already recorded
+                existing_purchase = UserPurchase.query.filter_by(
+                    user_id=current_user.id,
+                    bundle_id=bundle_id,
+                    stripe_payment_intent_id=session.payment_intent
+                ).first()
+                
+                if not existing_purchase:
+                    bundle = Bundle.query.get(bundle_id)
+                    
+                    # Record the bundle purchase
+                    purchase = UserPurchase(
+                        user_id=current_user.id,
+                        bundle_id=bundle_id,
+                        stripe_payment_intent_id=session.payment_intent,
+                        amount_paid=session.amount_total / 100,
+                        original_amount=original_amount,
+                        discount_amount=discount_amount,
+                        coupon_code=coupon_code,
+                        purchase_type='bundle'
+                    )
+                    db.session.add(purchase)
+                    db.session.flush()  # Get purchase ID
+                    
+                    # Record individual package access
+                    for bp in bundle.bundle_packages:
+                        # Check if user already has this package
+                        existing_pkg_purchase = UserPurchase.query.filter_by(
+                            user_id=current_user.id,
+                            test_package_id=bp.test_package_id
+                        ).first()
+                        
+                        if not existing_pkg_purchase:
+                            pkg_purchase = UserPurchase(
+                                user_id=current_user.id,
+                                test_package_id=bp.test_package_id,
+                                stripe_payment_intent_id=session.payment_intent,
+                                amount_paid=0,  # Individual packages in bundle have no separate cost
+                                original_amount=bp.test_package.price,
+                                discount_amount=bp.test_package.price,  # Full discount as part of bundle
+                                purchase_type='bundle_item'
+                            )
+                            db.session.add(pkg_purchase)
+                    
+                    # Handle coupon usage
+                    if coupon_code and discount_amount > 0:
+                        coupon = Coupon.query.filter_by(code=coupon_code).first()
+                        if coupon:
+                            coupon.used_count += 1
+                            
+                            coupon_usage = CouponUsage(
+                                coupon_id=coupon.id,
+                                user_id=current_user.id,
+                                purchase_id=purchase.id,
+                                discount_amount=discount_amount
+                            )
+                            db.session.add(coupon_usage)
+                    
+                    db.session.commit()
+                    
+                    # Send purchase confirmation email
+                    from email_service import send_purchase_confirmation_email
+                    send_purchase_confirmation_email(
+                        current_user.email, 
+                        bundle.title, 
+                        session.amount_total / 100
+                    )
+                    
+                    flash(f'Payment successful! You now have lifetime access to all {bundle.package_count} packages in {bundle.title}.', 'success')
+                else:
+                    flash('You already have access to this bundle.', 'info')
+                    
+            else:
+                # Single package purchase
+                from models import Coupon, CouponUsage
+                
+                existing_purchase = UserPurchase.query.filter_by(
                     user_id=current_user.id,
                     test_package_id=package_id,
-                    stripe_payment_intent_id=session.payment_intent,
-                    amount_paid=session.amount_total / 100  # Convert from cents
-                )
-                db.session.add(purchase)
-                db.session.commit()
+                    stripe_payment_intent_id=session.payment_intent
+                ).first()
                 
-                # Send purchase confirmation email
-                from email_service import send_purchase_confirmation_email
-                send_purchase_confirmation_email(
-                    current_user.email, 
-                    package.title, 
-                    session.amount_total / 100
-                )
-                
-                flash(f'Payment successful! You now have lifetime access to {package.title}.', 'success')
-            else:
-                flash('You already have access to this package.', 'info')
+                if not existing_purchase:
+                    package = TestPackage.query.get(package_id)
+                    purchase = UserPurchase(
+                        user_id=current_user.id,
+                        test_package_id=package_id,
+                        stripe_payment_intent_id=session.payment_intent,
+                        amount_paid=session.amount_total / 100,
+                        original_amount=original_amount,
+                        discount_amount=discount_amount,
+                        coupon_code=coupon_code,
+                        purchase_type='package'
+                    )
+                    db.session.add(purchase)
+                    db.session.flush()  # Get purchase ID
+                    
+                    # Handle coupon usage
+                    if coupon_code and discount_amount > 0:
+                        coupon = Coupon.query.filter_by(code=coupon_code).first()
+                        if coupon:
+                            coupon.used_count += 1
+                            
+                            coupon_usage = CouponUsage(
+                                coupon_id=coupon.id,
+                                user_id=current_user.id,
+                                purchase_id=purchase.id,
+                                discount_amount=discount_amount
+                            )
+                            db.session.add(coupon_usage)
+                    
+                    db.session.commit()
+                    
+                    # Send purchase confirmation email
+                    from email_service import send_purchase_confirmation_email
+                    send_purchase_confirmation_email(
+                        current_user.email, 
+                        package.title, 
+                        session.amount_total / 100
+                    )
+                    
+                    flash(f'Payment successful! You now have lifetime access to {package.title}.', 'success')
+                else:
+                    flash('You already have access to this package.', 'info')
         else:
             flash('Payment was not completed successfully.', 'error')
             

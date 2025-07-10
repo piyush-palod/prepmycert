@@ -1,0 +1,114 @@
+
+{% extends "base.html" %}
+
+{% block title %}Manage Coupons - Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="fas fa-tags me-2"></i>Manage Coupons</h2>
+                <div>
+                    <a href="{{ url_for('coupon_analytics') }}" class="btn btn-info me-2">
+                        <i class="fas fa-chart-line me-1"></i>Analytics
+                    </a>
+                    <a href="{{ url_for('create_coupon') }}" class="btn btn-primary">
+                        <i class="fas fa-plus me-1"></i>Create Coupon
+                    </a>
+                </div>
+            </div>
+
+            {% if coupons %}
+            <div class="card">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Code</th>
+                                    <th>Description</th>
+                                    <th>Discount</th>
+                                    <th>Usage</th>
+                                    <th>Valid Until</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for coupon in coupons %}
+                                <tr>
+                                    <td>
+                                        <code class="text-primary">{{ coupon.code }}</code>
+                                    </td>
+                                    <td>{{ coupon.description or 'No description' }}</td>
+                                    <td>
+                                        {% if coupon.discount_type == 'percentage' %}
+                                            <span class="badge bg-success">{{ coupon.discount_value }}% OFF</span>
+                                        {% else %}
+                                            <span class="badge bg-info">${{ "%.2f"|format(coupon.discount_value) }} OFF</span>
+                                        {% endif %}
+                                        {% if coupon.minimum_purchase %}
+                                            <small class="text-muted d-block">Min: ${{ "%.2f"|format(coupon.minimum_purchase) }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {{ coupon.used_count }}
+                                        {% if coupon.usage_limit %}
+                                            / {{ coupon.usage_limit }}
+                                        {% else %}
+                                            / ∞
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if coupon.valid_until %}
+                                            {{ coupon.valid_until.strftime('%Y-%m-%d') }}
+                                            {% if coupon.valid_until < moment().utcnow() %}
+                                                <span class="badge bg-danger ms-1">Expired</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-muted">No expiry</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if coupon.is_active %}
+                                            <span class="badge bg-success">Active</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Inactive</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <form method="POST" action="{{ url_for('toggle_coupon', coupon_id=coupon.id) }}" class="d-inline">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                            <button type="submit" class="btn btn-sm {% if coupon.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %}">
+                                                {% if coupon.is_active %}
+                                                    <i class="fas fa-pause"></i> Deactivate
+                                                {% else %}
+                                                    <i class="fas fa-play"></i> Activate
+                                                {% endif %}
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-tags text-muted mb-3" style="font-size: 3rem;"></i>
+                    <h5 class="text-muted">No coupons created yet</h5>
+                    <p class="text-muted">Create your first coupon to start offering discounts to your customers.</p>
+                    <a href="{{ url_for('create_coupon') }}" class="btn btn-primary">
+                        <i class="fas fa-plus me-1"></i>Create First Coupon
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

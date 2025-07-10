@@ -1,0 +1,196 @@
+
+{% extends "base.html" %}
+
+{% block title %}Create Bundle - Admin{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0"><i class="fas fa-box-open me-2"></i>Create New Bundle</h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="title" class="form-label">Bundle Title *</label>
+                                    <input type="text" class="form-control" id="title" name="title" required 
+                                           placeholder="e.g., Cloud Certification Bundle">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="price" class="form-label">Bundle Price *</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        <input type="number" class="form-control" id="price" name="price" 
+                                               step="0.01" min="0" required>
+                                    </div>
+                                    <div class="form-text">Must be less than the sum of individual package prices</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description *</label>
+                            <textarea class="form-control" id="description" name="description" rows="3" required 
+                                      placeholder="Describe what's included in this bundle and its benefits"></textarea>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label">Select Test Packages *</label>
+                            <div class="form-text mb-3">Choose at least 2 packages to include in this bundle</div>
+                            
+                            {% if packages %}
+                            <div class="row">
+                                {% for package in packages %}
+                                <div class="col-md-6 col-lg-4 mb-3">
+                                    <div class="card package-card">
+                                        <div class="card-body p-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input package-checkbox" type="checkbox" 
+                                                       id="package_{{ package.id }}" name="package_ids[]" 
+                                                       value="{{ package.id }}" data-price="{{ package.price }}">
+                                                <label class="form-check-label" for="package_{{ package.id }}">
+                                                    <strong>{{ package.title }}</strong>
+                                                </label>
+                                            </div>
+                                            <div class="mt-2">
+                                                <span class="badge bg-primary">${{ "%.2f"|format(package.price) }}</span>
+                                                <span class="badge bg-secondary">{{ package.domain }}</span>
+                                            </div>
+                                            <p class="card-text mt-2 mb-0">
+                                                <small class="text-muted">{{ package.description[:80] }}{% if package.description|length > 80 %}...{% endif %}</small>
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                No active test packages available. Please create some test packages first.
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="card bg-light mb-4">
+                            <div class="card-body">
+                                <h6 class="card-title">Pricing Summary</h6>
+                                <div class="row text-center">
+                                    <div class="col-md-3">
+                                        <div id="selected-count">0</div>
+                                        <small class="text-muted">Packages Selected</small>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div id="original-total">$0.00</div>
+                                        <small class="text-muted">Original Total</small>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div id="savings-amount">$0.00</div>
+                                        <small class="text-muted">Savings</small>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div id="savings-percentage">0%</div>
+                                        <small class="text-muted">Discount</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('admin_bundles') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left me-1"></i>Back to Bundles
+                            </a>
+                            <button type="submit" class="btn btn-primary" id="create-btn" disabled>
+                                <i class="fas fa-plus me-1"></i>Create Bundle
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.package-card {
+    border: 2px solid #e9ecef;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.package-card:hover {
+    border-color: #007bff;
+}
+
+.package-card.selected {
+    border-color: #007bff;
+    background-color: #f8f9fa;
+}
+
+.form-check-input:checked + .form-check-label {
+    color: #007bff;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const checkboxes = document.querySelectorAll('.package-checkbox');
+    const priceInput = document.getElementById('price');
+    const createBtn = document.getElementById('create-btn');
+    
+    function updateSummary() {
+        let selectedCount = 0;
+        let originalTotal = 0;
+        
+        checkboxes.forEach(checkbox => {
+            const card = checkbox.closest('.package-card');
+            if (checkbox.checked) {
+                selectedCount++;
+                originalTotal += parseFloat(checkbox.dataset.price);
+                card.classList.add('selected');
+            } else {
+                card.classList.remove('selected');
+            }
+        });
+        
+        const bundlePrice = parseFloat(priceInput.value) || 0;
+        const savings = Math.max(0, originalTotal - bundlePrice);
+        const savingsPercent = originalTotal > 0 ? (savings / originalTotal) * 100 : 0;
+        
+        document.getElementById('selected-count').textContent = selectedCount;
+        document.getElementById('original-total').textContent = '$' + originalTotal.toFixed(2);
+        document.getElementById('savings-amount').textContent = '$' + savings.toFixed(2);
+        document.getElementById('savings-percentage').textContent = savingsPercent.toFixed(0) + '%';
+        
+        // Enable create button only if at least 2 packages selected and valid price
+        createBtn.disabled = selectedCount < 2 || bundlePrice <= 0 || bundlePrice >= originalTotal;
+    }
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updateSummary);
+        
+        // Make entire card clickable
+        const card = checkbox.closest('.package-card');
+        card.addEventListener('click', function(e) {
+            if (e.target !== checkbox) {
+                checkbox.checked = !checkbox.checked;
+                updateSummary();
+            }
+        });
+    });
+    
+    priceInput.addEventListener('input', updateSummary);
+    
+    // Initial update
+    updateSummary();
+});
+</script>
+{% endblock %}

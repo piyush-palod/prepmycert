@@ -148,10 +148,25 @@ class UserPurchase(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    test_package_id = db.Column(db.Integer, db.ForeignKey('test_packages.id'), nullable=False)
+    test_package_id = db.Column(db.Integer, db.ForeignKey('test_packages.id'), nullable=True)  # nullable for bundles
+    bundle_id = db.Column(db.Integer, db.ForeignKey('bundles.id'), nullable=True)  # for bundle purchases
     stripe_payment_intent_id = db.Column(db.String(100), nullable=True)
     purchase_date = db.Column(db.DateTime, default=datetime.utcnow)
     amount_paid = db.Column(db.Float, nullable=False)
+    original_amount = db.Column(db.Float, nullable=False)  # amount before discount
+    discount_amount = db.Column(db.Float, default=0)  # discount applied
+    coupon_code = db.Column(db.String(50), nullable=True)  # coupon used
+    purchase_type = db.Column(db.String(20), default='package')  # 'package' or 'bundle'
+    
+    @property
+    def is_bundle_purchase(self):
+        return self.purchase_type == 'bundle' and self.bundle_id is not None
+    
+    @property
+    def display_title(self):
+        if self.is_bundle_purchase:
+            return self.bundle.title
+        return self.test_package.title if self.test_package else "Unknown Package"
 
 class TestAttempt(db.Model):
     __tablename__ = 'test_attempts'
@@ -181,6 +196,128 @@ class UserAnswer(db.Model):
     
     # Relationships
     selected_option = db.relationship('AnswerOption', lazy=True)
+
+class Coupon(db.Model):
+    __tablename__ = 'coupons'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    description = db.Column(db.String(200), nullable=True)
+    discount_type = db.Column(db.String(20), nullable=False)  # 'percentage' or 'fixed'
+    discount_value = db.Column(db.Float, nullable=False)  # percentage (0-100) or fixed amount
+    minimum_purchase = db.Column(db.Float, nullable=True)  # minimum purchase amount required
+    usage_limit = db.Column(db.Integer, nullable=True)  # null = unlimited
+    used_count = db.Column(db.Integer, default=0)
+    valid_from = db.Column(db.DateTime, default=datetime.utcnow)
+    valid_until = db.Column(db.DateTime, nullable=True)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    
+    # Relationships
+    coupon_usages = db.relationship('CouponUsage', backref='coupon', lazy=True)
+    creator = db.relationship('User', backref='created_coupons', lazy=True)
+    
+    def is_valid(self, user_id=None, purchase_amount=0):
+        """Check if coupon is valid for use"""
+        # Check if coupon is active
+        if not self.is_active:
+            return False, "Coupon is not active"
+        
+        # Check expiry date
+        if self.valid_until and datetime.utcnow() > self.valid_until:
+            return False, "Coupon has expired"
+        
+        # Check if coupon is valid yet
+        if datetime.utcnow() < self.valid_from:
+            return False, "Coupon is not yet valid"
+        
+        # Check usage limit
+        if self.usage_limit and self.used_count >= self.usage_limit:
+            return False, "Coupon usage limit reached"
+        
+        # Check minimum purchase amount
+        if self.minimum_purchase and purchase_amount < self.minimum_purchase:
+            return False, f"Minimum purchase amount of ${self.minimum_purchase:.2f} required"
+        
+        # Check if user has already used this coupon
+        if user_id:
+            existing_usage = CouponUsage.query.filter_by(
+                coupon_id=self.id, 
+                user_id=user_id
+            ).first()
+            if existing_usage:
+                return False, "You have already used this coupon"
+        
+        return True, "Coupon is valid"
+    
+    def calculate_discount(self, amount):
+        """Calculate discount amount based on coupon type"""
+        if self.discount_type == 'percentage':
+            return min(amount * (self.discount_value / 100), amount)
+        else:  # fixed
+            return min(self.discount_value, amount)
+
+class Bundle(db.Model):
+    __tablename__ = 'bundles'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    price = db.Column(db.Float, nullable=False)
+    original_price = db.Column(db.Float, nullable=False)  # sum of individual package prices
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    
+    # Relationships
+    bundle_packages = db.relationship('BundlePackage', backref='bundle', lazy=True, cascade='all, delete-orphan')
+    purchases = db.relationship('UserPurchase', backref='bundle', lazy=True)
+    creator = db.relationship('User', backref='created_bundles', lazy=True)
+    
+    @property
+    def savings(self):
+        """Calculate savings amount"""
+        return self.original_price - self.price
+    
+    @property
+    def savings_percentage(self):
+        """Calculate savings percentage"""
+        if self.original_price > 0:
+            return (self.savings / self.original_price) * 100
+        return 0
+    
+    @property
+    def package_count(self):
+        """Get number of packages in bundle"""
+        return len(self.bundle_packages)
+
+class BundlePackage(db.Model):
+    __tablename__ = 'bundle_packages'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    bundle_id = db.Column(db.Integer, db.ForeignKey('bundles.id'), nullable=False)
+    test_package_id = db.Column(db.Integer, db.ForeignKey('test_packages.id'), nullable=False)
+    
+    # Relationships
+    test_package = db.relationship('TestPackage', lazy=True)
+    
+    # Ensure unique combinations
+    __table_args__ = (db.UniqueConstraint('bundle_id', 'test_package_id'),)
+
+class CouponUsage(db.Model):
+    __tablename__ = 'coupon_usages'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    coupon_id = db.Column(db.Integer, db.ForeignKey('coupons.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    purchase_id = db.Column(db.Integer, db.ForeignKey('user_purchases.id'), nullable=False)
+    discount_amount = db.Column(db.Float, nullable=False)
+    used_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = db.relationship('User', backref='coupon_usages', lazy=True)
+    purchase = db.relationship('UserPurchase', backref='coupon_usage', lazy=True)
 
 class OTPToken(db.Model):
     __tablename__ = 'otp_tokens'

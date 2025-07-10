@@ -1,0 +1,224 @@
+
+{% extends "base.html" %}
+
+{% block title %}{{ bundle.title }} - PrepMyCert{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h2 class="mb-0">{{ bundle.title }}</h2>
+                    <div class="mt-2">
+                        <span class="badge bg-light text-dark me-2">{{ bundle.package_count }} Packages</span>
+                        <span class="badge bg-success">{{ "%.0f"|format(bundle.savings_percentage) }}% OFF</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <p class="lead">{{ bundle.description }}</p>
+                    
+                    <h5 class="mt-4 mb-3">Included Test Packages</h5>
+                    <div class="row">
+                        {% for bp in bundle.bundle_packages %}
+                        <div class="col-md-6 mb-3">
+                            <div class="card border-left-primary">
+                                <div class="card-body p-3">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div class="flex-grow-1">
+                                            <h6 class="card-title mb-1">{{ bp.test_package.title }}</h6>
+                                            <span class="badge bg-secondary mb-2">{{ bp.test_package.domain }}</span>
+                                            <p class="card-text text-muted small mb-2">
+                                                {{ bp.test_package.description[:100] }}{% if bp.test_package.description|length > 100 %}...{% endif %}
+                                            </p>
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <span class="text-muted">
+                                                    <small>Individual: ${{ "%.2f"|format(bp.test_package.price) }}</small>
+                                                </span>
+                                                {% if current_user.is_authenticated and individual_access.get(bp.test_package_id) %}
+                                                    <span class="badge bg-success">
+                                                        <i class="fas fa-check me-1"></i>Owned
+                                                    </span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card sticky-top" style="top: 20px;">
+                <div class="card-header">
+                    <h5 class="mb-0">Bundle Pricing</h5>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-4">
+                        <div class="h3 text-success mb-0">${{ "%.2f"|format(bundle.price) }}</div>
+                        <div class="text-muted text-decoration-line-through">${{ "%.2f"|format(bundle.original_price) }}</div>
+                        <div class="text-success">
+                            <strong>Save ${{ "%.2f"|format(bundle.savings) }} ({{ "%.0f"|format(bundle.savings_percentage) }}%)</strong>
+                        </div>
+                    </div>
+
+                    {% if current_user.is_authenticated %}
+                        {% if has_bundle_access %}
+                            <div class="alert alert-success text-center">
+                                <i class="fas fa-check-circle me-2"></i>
+                                You own this bundle!
+                            </div>
+                            <a href="{{ url_for('dashboard') }}" class="btn btn-success w-100">
+                                <i class="fas fa-arrow-right me-1"></i>Go to Dashboard
+                            </a>
+                        {% else %}
+                            <!-- Coupon Input Section -->
+                            <div class="mb-3">
+                                <label for="coupon_code" class="form-label">Have a coupon?</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="coupon_code" placeholder="Enter coupon code">
+                                    <button class="btn btn-outline-primary" type="button" id="apply_coupon">Apply</button>
+                                </div>
+                                <div id="coupon_message" class="form-text"></div>
+                            </div>
+
+                            <!-- Purchase Form -->
+                            <form method="POST" action="{{ url_for('create_checkout_session') }}" id="purchase_form">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                <input type="hidden" name="bundle_id" value="{{ bundle.id }}">
+                                <input type="hidden" name="coupon_code" id="applied_coupon" value="">
+                                
+                                <div id="pricing_summary" class="mb-3 p-3 bg-light rounded">
+                                    <div class="d-flex justify-content-between">
+                                        <span>Bundle Price:</span>
+                                        <span id="original_price">${{ "%.2f"|format(bundle.price) }}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between" id="discount_row" style="display: none;">
+                                        <span>Discount:</span>
+                                        <span id="discount_amount" class="text-success">-$0.00</span>
+                                    </div>
+                                    <hr class="my-2">
+                                    <div class="d-flex justify-content-between fw-bold">
+                                        <span>Total:</span>
+                                        <span id="final_price">${{ "%.2f"|format(bundle.price) }}</span>
+                                    </div>
+                                </div>
+                                
+                                <button type="submit" class="btn btn-primary w-100 btn-lg">
+                                    <i class="fas fa-shopping-cart me-2"></i>Purchase Bundle
+                                </button>
+                            </form>
+                        {% endif %}
+                    {% else %}
+                        <div class="alert alert-info text-center">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Please log in to purchase this bundle
+                        </div>
+                        <a href="{{ url_for('request_otp') }}" class="btn btn-primary w-100">
+                            <i class="fas fa-sign-in-alt me-1"></i>Login to Purchase
+                        </a>
+                    {% endif %}
+
+                    <div class="mt-3">
+                        <h6>Bundle Includes:</h6>
+                        <ul class="list-unstyled small">
+                            <li><i class="fas fa-check text-success me-2"></i>Lifetime access to all {{ bundle.package_count }} packages</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Unlimited test attempts</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Detailed explanations for all questions</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Progress tracking and analytics</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const couponInput = document.getElementById('coupon_code');
+    const applyButton = document.getElementById('apply_coupon');
+    const couponMessage = document.getElementById('coupon_message');
+    const appliedCouponInput = document.getElementById('applied_coupon');
+    const discountRow = document.getElementById('discount_row');
+    const discountAmount = document.getElementById('discount_amount');
+    const finalPrice = document.getElementById('final_price');
+    const originalPrice = {{ bundle.price }};
+    
+    let currentDiscount = 0;
+    
+    function updatePricing(discount = 0) {
+        currentDiscount = discount;
+        const final = Math.max(0, originalPrice - discount);
+        
+        if (discount > 0) {
+            discountRow.style.display = 'flex';
+            discountAmount.textContent = '-$' + discount.toFixed(2);
+        } else {
+            discountRow.style.display = 'none';
+        }
+        
+        finalPrice.textContent = '$' + final.toFixed(2);
+    }
+    
+    applyButton.addEventListener('click', function() {
+        const code = couponInput.value.trim().toUpperCase();
+        if (!code) {
+            couponMessage.innerHTML = '<span class="text-danger">Please enter a coupon code</span>';
+            return;
+        }
+        
+        applyButton.disabled = true;
+        applyButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Applying...';
+        
+        fetch('/api/validate-coupon', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({
+                code: code,
+                amount: originalPrice
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.valid) {
+                couponMessage.innerHTML = '<span class="text-success"><i class="fas fa-check me-1"></i>' + data.message + '</span>';
+                appliedCouponInput.value = code;
+                updatePricing(data.discount_amount);
+                couponInput.disabled = true;
+                applyButton.innerHTML = 'Applied';
+                applyButton.className = 'btn btn-success';
+            } else {
+                couponMessage.innerHTML = '<span class="text-danger"><i class="fas fa-times me-1"></i>' + data.message + '</span>';
+                appliedCouponInput.value = '';
+                updatePricing(0);
+            }
+        })
+        .catch(error => {
+            couponMessage.innerHTML = '<span class="text-danger">Error validating coupon</span>';
+            console.error('Error:', error);
+        })
+        .finally(() => {
+            if (!couponInput.disabled) {
+                applyButton.disabled = false;
+                applyButton.innerHTML = 'Apply';
+            }
+        });
+    });
+    
+    // Allow applying coupon with Enter key
+    couponInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            applyButton.click();
+        }
+    });
+});
+</script>
+{% endblock %}

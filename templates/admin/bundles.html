@@ -1,0 +1,96 @@
+
+{% extends "base.html" %}
+
+{% block title %}Manage Bundles - Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="fas fa-box-open me-2"></i>Manage Bundles</h2>
+                <a href="{{ url_for('create_bundle') }}" class="btn btn-primary">
+                    <i class="fas fa-plus me-1"></i>Create Bundle
+                </a>
+            </div>
+
+            {% if bundles %}
+            <div class="row">
+                {% for bundle in bundles %}
+                <div class="col-lg-6 col-xl-4 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0">{{ bundle.title }}</h6>
+                            {% if bundle.is_active %}
+                                <span class="badge bg-success">Active</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Inactive</span>
+                            {% endif %}
+                        </div>
+                        <div class="card-body">
+                            <p class="card-text text-muted">{{ bundle.description }}</p>
+                            
+                            <div class="row mb-3">
+                                <div class="col-6">
+                                    <strong class="text-success">${{ "%.2f"|format(bundle.price) }}</strong>
+                                    <small class="text-muted d-block">Bundle Price</small>
+                                </div>
+                                <div class="col-6">
+                                    <span class="text-muted">${{ "%.2f"|format(bundle.original_price) }}</span>
+                                    <small class="text-muted d-block">Original Price</small>
+                                </div>
+                            </div>
+
+                            <div class="alert alert-success py-2 mb-3">
+                                <i class="fas fa-tag me-1"></i>
+                                <strong>{{ "%.0f"|format(bundle.savings_percentage) }}% OFF</strong>
+                                (Save ${{ "%.2f"|format(bundle.savings) }})
+                            </div>
+
+                            <h6>Included Packages ({{ bundle.package_count }}):</h6>
+                            <ul class="list-unstyled mb-3">
+                                {% for bp in bundle.bundle_packages %}
+                                <li class="d-flex justify-content-between align-items-center py-1">
+                                    <span class="text-truncate me-2">{{ bp.test_package.title }}</span>
+                                    <small class="text-muted">${{ "%.2f"|format(bp.test_package.price) }}</small>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        <div class="card-footer">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="text-muted">
+                                    Created {{ bundle.created_at.strftime('%Y-%m-%d') }}
+                                </small>
+                                <form method="POST" action="{{ url_for('toggle_bundle', bundle_id=bundle.id) }}" class="d-inline">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                    <button type="submit" class="btn btn-sm {% if bundle.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %}">
+                                        {% if bundle.is_active %}
+                                            <i class="fas fa-pause"></i> Deactivate
+                                        {% else %}
+                                            <i class="fas fa-play"></i> Activate
+                                        {% endif %}
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-box-open text-muted mb-3" style="font-size: 3rem;"></i>
+                    <h5 class="text-muted">No bundles created yet</h5>
+                    <p class="text-muted">Create your first bundle to offer packages at discounted prices.</p>
+                    <a href="{{ url_for('create_bundle') }}" class="btn btn-primary">
+                        <i class="fas fa-plus me-1"></i>Create First Bundle
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
