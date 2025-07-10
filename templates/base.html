@@ -42,12 +42,18 @@
                         </li>
                         {% if current_user.is_admin %}
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown">
-                                <i class="fas fa-crown me-1"></i>Admin
+                            <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fas fa-cog me-1"></i>Admin
                             </a>
-                            <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" href="{{ url_for('admin_packages') }}">Manage Packages</a></li>
-                                <li><a class="dropdown-item" href="{{ url_for('import_questions') }}">Import Questions</a></li>
+                            <ul class="dropdown-menu" aria-labelledby="adminDropdown">
+                                <li><a class="dropdown-item" href="{{ url_for('import_questions') }}"><i class="fas fa-upload me-2"></i>Manage Questions</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('admin_packages') }}"><i class="fas fa-box me-2"></i>Manage Packages</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('admin_users') }}"><i class="fas fa-users me-2"></i>Manage Users</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{{ url_for('admin_coupons') }}"><i class="fas fa-ticket-alt me-2"></i>Manage Coupons</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('admin_bundles') }}"><i class="fas fa-box-open me-2"></i>Manage Bundles</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{{ url_for('email_settings') }}"><i class="fas fa-envelope me-2"></i>Email Settings</a></li>
                             </ul>
                         </li>
                         {% endif %}
