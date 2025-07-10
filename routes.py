@@ -4,7 +4,7 @@ import stripe
 from flask import render_template, request, redirect, url_for, flash, session, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
 from app import app, db
-from models import User, TestPackage, Question, AnswerOption, UserPurchase, TestAttempt, UserAnswer
+from models import User, TestPackage, Question, AnswerOption, UserPurchase, TestAttempt, UserAnswer, Bundle, Coupon
 from utils import import_questions_from_csv, process_text_with_images
 from datetime import datetime
 
@@ -942,6 +942,22 @@ def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS and \
            len(filename) < 255
+
+@app.route('/admin/coupons')
+@login_required
+def admin_coupons():
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('dashboard'))
+    return redirect(url_for('admin_coupon_list'))
+
+@app.route('/admin/bundles')
+@login_required
+def admin_bundles():
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('dashboard'))
+    return redirect(url_for('admin_bundle_list'))
 
 @app.errorhandler(404)
 def not_found_error(error):

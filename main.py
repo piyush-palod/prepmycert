@@ -1,4 +1,3 @@
-
 from app import app, db
 import os
 from routes import *  # Import all routes
