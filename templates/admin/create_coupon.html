@@ -78,15 +78,14 @@
                             <div class="col-md-6">
                                 <div class="mb-3">
                                     <label for="valid_until" class="form-label">Valid Until</label>
-                                    <input type="date" class="form-control" id="valid_until" name="valid_until" 
-                                           min="{{ moment().utcnow().strftime('%Y-%m-%d') }}">
+                                    <input type="date" class="form-control" id="valid_until" name="valid_until">
                                     <div class="form-text">Leave empty for no expiry date</div>
                                 </div>
                             </div>
                         </div>
 
                         <div class="d-flex justify-content-between">
-                            <a href="{{ url_for('admin_coupons') }}" class="btn btn-secondary">
+                            <a href="{{ url_for('admin_coupon_list') }}" class="btn btn-secondary">
                                 <i class="fas fa-arrow-left me-1"></i>Back to Coupons
                             </a>
                             <button type="submit" class="btn btn-primary">
@@ -101,26 +100,33 @@
 </div>
 
 <script>
-document.getElementById('discount_type').addEventListener('change', function() {
-    const prefix = document.getElementById('discount-prefix');
-    const suffix = document.getElementById('discount-suffix');
-    const input = document.getElementById('discount_value');
+document.addEventListener('DOMContentLoaded', function() {
+    // Set minimum date to today
+    const dateInput = document.getElementById('valid_until');
+    const today = new Date().toISOString().split('T')[0];
+    dateInput.min = today;
     
-    if (this.value === 'percentage') {
-        prefix.style.display = 'none';
-        suffix.style.display = 'block';
-        input.max = '100';
-        input.placeholder = 'e.g., 20 for 20%';
-    } else if (this.value === 'fixed') {
-        prefix.style.display = 'block';
-        suffix.style.display = 'none';
-        input.removeAttribute('max');
-        input.placeholder = 'e.g., 10.00';
-    }
-});
+    document.getElementById('discount_type').addEventListener('change', function() {
+        const prefix = document.getElementById('discount-prefix');
+        const suffix = document.getElementById('discount-suffix');
+        const input = document.getElementById('discount_value');
+        
+        if (this.value === 'percentage') {
+            prefix.style.display = 'none';
+            suffix.style.display = 'block';
+            input.max = '100';
+            input.placeholder = 'e.g., 20 for 20%';
+        } else if (this.value === 'fixed') {
+            prefix.style.display = 'block';
+            suffix.style.display = 'none';
+            input.removeAttribute('max');
+            input.placeholder = 'e.g., 10.00';
+        }
+    });
 
-document.getElementById('code').addEventListener('input', function() {
-    this.value = this.value.toUpperCase();
+    document.getElementById('code').addEventListener('input', function() {
+        this.value = this.value.toUpperCase();
+    });
 });
 </script>
 {% endblock %}
