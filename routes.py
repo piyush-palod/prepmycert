@@ -943,21 +943,7 @@ def allowed_file(filename):
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS and \
            len(filename) < 255
 
-@app.route('/admin/coupons')
-@login_required
-def admin_coupons():
-    if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.', 'error')
-        return redirect(url_for('dashboard'))
-    return redirect(url_for('admin_coupon_list'))
 
-@app.route('/admin/bundles')
-@login_required
-def admin_bundles():
-    if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.', 'error')
-        return redirect(url_for('dashboard'))
-    return redirect(url_for('admin_bundle_list'))
 
 @app.errorhandler(404)
 def not_found_error(error):

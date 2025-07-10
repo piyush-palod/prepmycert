@@ -8,7 +8,7 @@ import re
 
 @app.route('/admin/coupons')
 @login_required
-def admin_coupons():
+def admin_coupon_list():
     if not current_user.is_admin:
         flash('Access denied. Admin privileges required.', 'error')
         return redirect(url_for('dashboard'))
@@ -68,7 +68,7 @@ def create_coupon():
             db.session.commit()
             
             flash(f'Coupon "{code}" created successfully!', 'success')
-            return redirect(url_for('admin_coupons'))
+            return redirect(url_for('admin_coupon_list'))
             
         except ValueError as e:
             flash('Invalid input values. Please check your entries.', 'error')
@@ -90,11 +90,11 @@ def toggle_coupon(coupon_id):
     
     status = 'activated' if coupon.is_active else 'deactivated'
     flash(f'Coupon "{coupon.code}" {status} successfully.', 'success')
-    return redirect(url_for('admin_coupons'))
+    return redirect(url_for('admin_coupon_list'))
 
 @app.route('/admin/bundles')
 @login_required
-def admin_bundles():
+def admin_bundle_list():
     if not current_user.is_admin:
         flash('Access denied. Admin privileges required.', 'error')
         return redirect(url_for('dashboard'))
@@ -154,7 +154,7 @@ def create_bundle():
             db.session.commit()
             
             flash(f'Bundle "{title}" created successfully!', 'success')
-            return redirect(url_for('admin_bundles'))
+            return redirect(url_for('admin_bundle_list'))
             
         except ValueError:
             flash('Invalid price value. Please enter a valid number.', 'error')
@@ -177,7 +177,7 @@ def toggle_bundle(bundle_id):
     
     status = 'activated' if bundle.is_active else 'deactivated'
     flash(f'Bundle "{bundle.title}" {status} successfully.', 'success')
-    return redirect(url_for('admin_bundles'))
+    return redirect(url_for('admin_bundle_list'))
 
 @app.route('/admin/coupon-analytics')
 @login_required
