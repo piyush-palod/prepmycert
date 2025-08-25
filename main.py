@@ -1,5 +1,10 @@
-from app import app, db
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+from app import app, db
 from routes import *  # Import all routes
 import admin_coupon_routes  # Import coupon and bundle routes
 import admin_email_routes  # Import email routes

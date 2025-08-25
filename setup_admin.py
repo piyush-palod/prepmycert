@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """Setup script to create admin user and sample data"""
 
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
 from app import app, db
 from models import User, TestPackage, Question, AnswerOption
 from utils import import_questions_from_csv
