@@ -9,6 +9,83 @@ from flask_limiter.util import get_remote_address
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+
+try:
+    from azure_storage import init_azure_storage, test_azure_connection
+    AZURE_AVAILABLE = True
+except ImportError:
+    AZURE_AVAILABLE = False
+    logging.warning("Azure storage libraries not installed. Azure image storage disabled.")
+
+# === ADD THIS SECTION AFTER YOUR EMAIL SERVICE INIT ===
+# Initialize Azure Blob Storage
+if AZURE_AVAILABLE:
+    # Add Azure configuration to Flask config
+    app.config['AZURE_STORAGE_CONNECTION_STRING'] = os.environ.get('AZURE_STORAGE_CONNECTION_STRING')
+    app.config['AZURE_STORAGE_CONTAINER_NAME'] = os.environ.get('AZURE_STORAGE_CONTAINER_NAME', 'certification-images')
+    
+    # Initialize Azure storage
+    init_azure_storage(app)
+    
+    # Test connection during startup (in development)
+    if app.debug or os.environ.get('FLASK_ENV') == 'development':
+        with app.app_context():
+            success, message = test_azure_connection()
+            if success:
+                logging.info(f"Azure Storage: {message}")
+            else:
+                logging.warning(f"Azure Storage: {message}")
+else:
+    logging.info("Azure Storage integration disabled - missing azure-storage-blob library")
+
+# === ADD THIS HELPER ROUTE FOR TESTING (OPTIONAL) ===
+@app.route('/admin/test-azure')
+@login_required
+def test_azure_storage():
+    """Admin route to test Azure storage connectivity"""
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    if not AZURE_AVAILABLE:
+        return jsonify({
+            'success': False,
+            'error': 'Azure storage libraries not installed',
+            'instructions': 'Run: pip install azure-storage-blob'
+        })
+    
+    try:
+        from azure_storage import test_azure_connection, get_cache_stats, list_blobs_in_folder
+        
+        # Test connection
+        success, message = test_azure_connection()
+        
+        # Get cache stats
+        cache_stats = get_cache_stats()
+        
+        # Try to list some blobs (if connection works)
+        sample_blobs = {}
+        if success:
+            # Test with common folder names
+            test_folders = ['ai-102', 'az-900', 'aws-clf-002']
+            for folder in test_folders:
+                blobs = list_blobs_in_folder(folder, max_results=3)
+                if blobs:
+                    sample_blobs[folder] = blobs
+        
+        return jsonify({
+            'success': success,
+            'message': message,
+            'cache_stats': cache_stats,
+            'sample_blobs': sample_blobs,
+            'azure_configured': success
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 

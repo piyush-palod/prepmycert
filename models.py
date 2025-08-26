@@ -1,101 +1,120 @@
+import re
 from datetime import datetime, timedelta
-from app import db
+from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
-import pyotp
+from app import db
 import secrets
+import string
 
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
     
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False, index=True)
-    password_hash = db.Column(db.String(256), nullable=True)  # Made nullable for OTP-only users
     first_name = db.Column(db.String(50), nullable=False)
     last_name = db.Column(db.String(50), nullable=False)
+    password_hash = db.Column(db.String(255), nullable=True)  # Optional for OTP-only users
     is_admin = db.Column(db.Boolean, default=False)
     is_email_verified = db.Column(db.Boolean, default=False)
-    otp_secret = db.Column(db.String(32), nullable=True)  # For TOTP
-    last_login_attempt = db.Column(db.DateTime, nullable=True)
-    login_attempts = db.Column(db.Integer, default=0)
     is_locked = db.Column(db.Boolean, default=False)
-    locked_until = db.Column(db.DateTime, nullable=True)
+    failed_login_attempts = db.Column(db.Integer, default=0)
+    last_failed_login = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationships
     purchases = db.relationship('UserPurchase', backref='user', lazy=True)
     test_attempts = db.relationship('TestAttempt', backref='user', lazy=True)
-    otp_tokens = db.relationship('OTPToken', backref='user', lazy=True, cascade='all, delete-orphan')
+    otp_tokens = db.relationship('OTPToken', backref='user', lazy=True)
     
     def set_password(self, password):
-        if password:
-            self.password_hash = generate_password_hash(password)
+        """Set password hash"""
+        self.password_hash = generate_password_hash(password)
     
     def check_password(self, password):
+        """Check password"""
         if not self.password_hash:
             return False
         return check_password_hash(self.password_hash, password)
     
-    def generate_otp_secret(self):
-        """Generate a new OTP secret for the user"""
-        self.otp_secret = pyotp.random_base32()
-        return self.otp_secret
-    
-    def get_totp_uri(self):
-        """Get TOTP URI for QR code generation"""
-        if not self.otp_secret:
-            self.generate_otp_secret()
-        
-        totp = pyotp.TOTP(self.otp_secret)
-        return totp.provisioning_uri(
-            name=self.email,
-            issuer_name="PrepMyCert"
-        )
-    
-    def verify_totp(self, token):
-        """Verify TOTP token"""
-        if not self.otp_secret:
+    def is_account_locked(self):
+        """Check if account is locked due to failed attempts"""
+        if not self.is_locked:
             return False
         
-        totp = pyotp.TOTP(self.otp_secret)
-        return totp.verify(token, valid_window=1)
-    
-    def is_account_locked(self):
-        """Check if account is locked due to too many failed attempts"""
-        if self.is_locked and self.locked_until:
-            if datetime.utcnow() < self.locked_until:
-                return True
-            else:
-                # Unlock account if lock period has expired
+        # Auto unlock after 30 minutes
+        if self.last_failed_login:
+            unlock_time = self.last_failed_login + timedelta(minutes=30)
+            if datetime.utcnow() > unlock_time:
                 self.is_locked = False
-                self.locked_until = None
-                self.login_attempts = 0
+                self.failed_login_attempts = 0
                 db.session.commit()
-        return False
-    
-    def increment_login_attempts(self):
-        """Increment failed login attempts and lock account if necessary"""
-        self.login_attempts += 1
-        self.last_login_attempt = datetime.utcnow()
+                return False
         
-        # Lock account after 5 failed attempts for 30 minutes
-        if self.login_attempts >= 5:
+        return True
+    
+    def record_failed_login(self):
+        """Record a failed login attempt"""
+        self.failed_login_attempts += 1
+        self.last_failed_login = datetime.utcnow()
+        
+        # Lock account after 5 failed attempts
+        if self.failed_login_attempts >= 5:
             self.is_locked = True
-            self.locked_until = datetime.utcnow() + timedelta(minutes=30)
         
         db.session.commit()
     
-    def reset_login_attempts(self):
-        """Reset login attempts after successful login"""
-        self.login_attempts = 0
-        self.last_login_attempt = datetime.utcnow()
+    def reset_failed_attempts(self):
+        """Reset failed login attempts after successful login"""
+        self.failed_login_attempts = 0
         self.is_locked = False
-        self.locked_until = None
+        self.last_failed_login = None
+        db.session.commit()
+
+class OTPToken(db.Model):
+    __tablename__ = 'otp_tokens'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    token = db.Column(db.String(10), nullable=False, index=True)
+    purpose = db.Column(db.String(50), nullable=False)  # login, verification, password_reset
+    is_used = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    ip_address = db.Column(db.String(45), nullable=True)  # IPv4/IPv6 support
+    
+    def __init__(self, user_id, purpose, duration_minutes=10, ip_address=None):
+        self.user_id = user_id
+        self.purpose = purpose
+        self.token = self.generate_token()
+        self.created_at = datetime.utcnow()
+        self.expires_at = self.created_at + timedelta(minutes=duration_minutes)
+        self.ip_address = ip_address
+    
+    def generate_token(self):
+        """Generate a 6-digit numeric OTP"""
+        return ''.join(secrets.choice(string.digits) for _ in range(6))
+    
+    def is_valid(self):
+        """Check if token is valid (not used and not expired)"""
+        return not self.is_used and datetime.utcnow() < self.expires_at
+    
+    def mark_as_used(self):
+        """Mark token as used"""
+        self.is_used = True
         db.session.commit()
     
-    @property
-    def full_name(self):
-        return f"{self.first_name} {self.last_name}"
+    @classmethod
+    def cleanup_expired_tokens(cls):
+        """Remove expired tokens from database"""
+        expired_tokens = cls.query.filter(cls.expires_at < datetime.utcnow()).all()
+        count = len(expired_tokens)
+        
+        for token in expired_tokens:
+            db.session.delete(token)
+        
+        db.session.commit()
+        return count
 
 class TestPackage(db.Model):
     __tablename__ = 'test_packages'
@@ -104,19 +123,88 @@ class TestPackage(db.Model):
     title = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=False)
     price = db.Column(db.Float, nullable=False)
-    stripe_price_id = db.Column(db.String(100), nullable=True)
-    domain = db.Column(db.String(100), nullable=False)  # e.g., "Cloud Computing", "Cybersecurity"
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    
+    # NEW FIELD - Azure folder configuration
+    azure_folder_name = db.Column(db.String(100), nullable=True, index=True)
     
     # Relationships
     questions = db.relationship('Question', backref='test_package', lazy=True)
     purchases = db.relationship('UserPurchase', backref='test_package', lazy=True)
     test_attempts = db.relationship('TestAttempt', backref='test_package', lazy=True)
+    creator = db.relationship('User', backref='created_packages', lazy=True)
     
     @property
     def question_count(self):
         return len(self.questions)
+    
+    @property
+    def azure_image_base_url(self):
+        """
+        Generate the base URL for images in this package's Azure folder
+        Returns None if no Azure folder is configured
+        """
+        if not self.azure_folder_name:
+            return None
+            
+        try:
+            from azure_storage import get_container_base_url
+            return get_container_base_url(self.azure_folder_name)
+        except ImportError:
+            # Azure storage not yet implemented
+            return None
+    
+    @property
+    def uses_azure_storage(self):
+        """Check if this package uses Azure storage for images"""
+        return bool(self.azure_folder_name and self.azure_folder_name.strip())
+    
+    def get_image_url(self, image_name):
+        """
+        Get the full URL for a specific image in this package
+        Falls back to local storage if Azure is not configured
+        """
+        if self.uses_azure_storage:
+            try:
+                from azure_storage import get_blob_url
+                return get_blob_url(self.azure_folder_name, image_name)
+            except ImportError:
+                # Azure storage not yet implemented, fall back to local
+                pass
+        
+        # Fallback to existing local storage logic
+        safe_package_name = re.sub(r'[^a-zA-Z0-9\-_]', '_', self.title.lower().replace(' ', '_'))
+        return f"/static/images/questions/{safe_package_name}/{image_name}"
+    
+    def validate_azure_folder_name(self):
+        """
+        Validate the Azure folder name format
+        Returns tuple (is_valid, error_message)
+        """
+        if not self.azure_folder_name:
+            return True, None
+            
+        folder_name = self.azure_folder_name.strip()
+        
+        # Check for valid characters (lowercase letters, numbers, hyphens)
+        if not re.match(r'^[a-z0-9\-]+$', folder_name):
+            return False, "Folder name must contain only lowercase letters, numbers, and hyphens"
+        
+        # Check length
+        if len(folder_name) < 2 or len(folder_name) > 63:
+            return False, "Folder name must be between 2 and 63 characters"
+        
+        # Check for consecutive hyphens
+        if '--' in folder_name:
+            return False, "Folder name cannot contain consecutive hyphens"
+        
+        # Check start/end characters
+        if folder_name.startswith('-') or folder_name.endswith('-'):
+            return False, "Folder name cannot start or end with hyphen"
+            
+        return True, None
 
 class Question(db.Model):
     __tablename__ = 'questions'
@@ -206,56 +294,47 @@ class Coupon(db.Model):
     discount_type = db.Column(db.String(20), nullable=False)  # 'percentage' or 'fixed'
     discount_value = db.Column(db.Float, nullable=False)  # percentage (0-100) or fixed amount
     minimum_purchase = db.Column(db.Float, nullable=True)  # minimum purchase amount required
-    usage_limit = db.Column(db.Integer, nullable=True)  # null = unlimited
-    used_count = db.Column(db.Integer, default=0)
+    usage_limit = db.Column(db.Integer, nullable=True)  # max number of uses (null = unlimited)
+    current_uses = db.Column(db.Integer, default=0)  # current number of uses
     valid_from = db.Column(db.DateTime, default=datetime.utcnow)
-    valid_until = db.Column(db.DateTime, nullable=True)
+    valid_until = db.Column(db.DateTime, nullable=True)  # null = no expiration
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     
     # Relationships
-    coupon_usages = db.relationship('CouponUsage', backref='coupon', lazy=True)
     creator = db.relationship('User', backref='created_coupons', lazy=True)
+    usage_records = db.relationship('CouponUsage', backref='coupon', lazy=True)
     
-    def is_valid(self, user_id=None, purchase_amount=0):
+    def is_valid_for_use(self, purchase_amount=None):
         """Check if coupon is valid for use"""
-        # Check if coupon is active
+        now = datetime.utcnow()
+        
+        # Basic validity checks
         if not self.is_active:
             return False, "Coupon is not active"
         
-        # Check expiry date
-        if self.valid_until and datetime.utcnow() > self.valid_until:
-            return False, "Coupon has expired"
-        
-        # Check if coupon is valid yet
-        if datetime.utcnow() < self.valid_from:
+        if now < self.valid_from:
             return False, "Coupon is not yet valid"
         
-        # Check usage limit
-        if self.usage_limit and self.used_count >= self.usage_limit:
+        if self.valid_until and now > self.valid_until:
+            return False, "Coupon has expired"
+        
+        # Usage limit check
+        if self.usage_limit and self.current_uses >= self.usage_limit:
             return False, "Coupon usage limit reached"
         
-        # Check minimum purchase amount
-        if self.minimum_purchase and purchase_amount < self.minimum_purchase:
-            return False, f"Minimum purchase amount of ${self.minimum_purchase:.2f} required"
+        # Minimum purchase check
+        if purchase_amount and self.minimum_purchase and purchase_amount < self.minimum_purchase:
+            return False, f"Minimum purchase of ${self.minimum_purchase:.2f} required"
         
-        # Check if user has already used this coupon
-        if user_id:
-            existing_usage = CouponUsage.query.filter_by(
-                coupon_id=self.id, 
-                user_id=user_id
-            ).first()
-            if existing_usage:
-                return False, "You have already used this coupon"
-        
-        return True, "Coupon is valid"
+        return True, None
     
     def calculate_discount(self, amount):
-        """Calculate discount amount based on coupon type"""
+        """Calculate discount amount for given purchase amount"""
         if self.discount_type == 'percentage':
             return min(amount * (self.discount_value / 100), amount)
-        else:  # fixed
+        else:  # fixed amount
             return min(self.discount_value, amount)
 
 class Bundle(db.Model):
@@ -316,62 +395,5 @@ class CouponUsage(db.Model):
     used_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationships
-    user = db.relationship('User', backref='coupon_usages', lazy=True)
+    user = db.relationship('User', backref='coupon_uses', lazy=True)
     purchase = db.relationship('UserPurchase', backref='coupon_usage', lazy=True)
-
-class OTPToken(db.Model):
-    __tablename__ = 'otp_tokens'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    token = db.Column(db.String(6), nullable=False, index=True)
-    purpose = db.Column(db.String(20), nullable=False)  # 'login', 'password_reset', 'verification'
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    expires_at = db.Column(db.DateTime, nullable=False)
-    is_used = db.Column(db.Boolean, default=False)
-    attempts = db.Column(db.Integer, default=0)
-    ip_address = db.Column(db.String(45), nullable=True)
-    
-    def __init__(self, user_id, purpose, duration_minutes=10, ip_address=None):
-        self.user_id = user_id
-        self.purpose = purpose
-        self.token = self.generate_token()
-        self.expires_at = datetime.utcnow() + timedelta(minutes=duration_minutes)
-        self.ip_address = ip_address
-    
-    @staticmethod
-    def generate_token():
-        """Generate a 6-digit OTP token"""
-        return f"{secrets.randbelow(1000000):06d}"
-    
-    def is_expired(self):
-        """Check if token has expired"""
-        return datetime.utcnow() > self.expires_at
-    
-    def is_valid(self):
-        """Check if token is valid (not expired, not used, not too many attempts)"""
-        return not self.is_expired() and not self.is_used and self.attempts < 3
-    
-    def verify_token(self, provided_token):
-        """Verify the provided token against this OTP"""
-        self.attempts += 1
-        db.session.commit()
-        
-        if not self.is_valid():
-            return False
-        
-        if self.token == provided_token:
-            self.is_used = True
-            db.session.commit()
-            return True
-        
-        return False
-    
-    @classmethod
-    def cleanup_expired_tokens(cls):
-        """Remove expired tokens from database"""
-        expired_tokens = cls.query.filter(cls.expires_at < datetime.utcnow()).all()
-        for token in expired_tokens:
-            db.session.delete(token)
-        db.session.commit()
-        return len(expired_tokens)
