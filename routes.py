@@ -5,12 +5,8 @@ from flask import render_template, request, redirect, url_for, flash, session, j
 from flask_login import login_user, logout_user, login_required, current_user
 from app import app, db
 from models import User, TestPackage, Question, AnswerOption, UserPurchase, TestAttempt, UserAnswer, Bundle, Coupon
-from utils import import_questions_from_csv, process_text_with_images
+from utils import import_questions_from_csv, process_text_with_images, validate_image_processing
 from datetime import datetime
-
-import os
-import re
-import stripe
 from werkzeug.utils import secure_filename
 from flask import render_template, request, redirect, url_for, flash, session, jsonify
 
@@ -435,45 +431,24 @@ def payment_cancel():
 @app.route('/take-test/<int:package_id>')
 @login_required
 def take_test(package_id):
-    # Check if user has purchased this package or is an admin
+    """Take a test with Azure image integration"""
+    # Check if user has purchased this package
     purchase = UserPurchase.query.filter_by(
         user_id=current_user.id,
         test_package_id=package_id
     ).first()
-
-    if not purchase and not current_user.is_admin:
-        flash('You must purchase this package before taking the test.', 'error')
-        return redirect(url_for('package_detail', package_id=package_id))
-
+    
+    if not purchase:
+        flash('You need to purchase this test package first.', 'error')
+        return redirect(url_for('test_packages'))
+    
     package = TestPackage.query.get_or_404(package_id)
-    questions = Question.query.filter_by(test_package_id=package_id).all()
-
+    questions = package.questions
+    
     if not questions:
-        flash('This test package does not have any questions yet.', 'warning')
+        flash('This test package has no questions yet.', 'warning')
         return redirect(url_for('dashboard'))
-
-    # Convert questions to serializable format
-    questions_data = []
-    for question in questions:
-        options_data = []
-        for option in question.answer_options:
-            options_data.append({
-                'id': option.id,
-                'text': option.option_text,
-                'order': option.option_order
-            })
-
-        # Sort options by order
-        options_data.sort(key=lambda x: x['order'])
-
-        questions_data.append({
-            'id': question.id,
-            'text': process_text_with_images(question.question_text, package.title),
-            'type': question.question_type,
-            'domain': question.domain,
-            'options': options_data
-        })
-
+    
     # Create new test attempt
     test_attempt = TestAttempt(
         user_id=current_user.id,
@@ -482,14 +457,42 @@ def take_test(package_id):
     )
     db.session.add(test_attempt)
     db.session.commit()
-
-    session['test_attempt_id'] = test_attempt.id
-    session['current_question_index'] = 0
-
-    return render_template('test_taking.html', 
-                         package=package, 
-                         questions=questions_data,
-                         test_attempt=test_attempt)
+    
+    # Process questions for Azure images
+    processed_questions = []
+    for question in questions:
+        processed_question_text = process_text_with_images(
+            question.question_text,
+            package.title,
+            package.azure_folder_name if hasattr(package, 'azure_folder_name') else None
+        )
+        
+        processed_options = []
+        for option in question.answer_options:
+            processed_option_text = process_text_with_images(
+                option.option_text,
+                package.title,
+                package.azure_folder_name if hasattr(package, 'azure_folder_name') else None
+            )
+            
+            processed_options.append({
+                'id': option.id,
+                'text': processed_option_text,
+                'order': option.option_order
+            })
+        
+        processed_questions.append({
+            'id': question.id,
+            'text': processed_question_text,
+            'type': question.question_type,
+            'domain': question.domain,
+            'options': processed_options
+        })
+    
+    return render_template('take_test.html', 
+                         test_attempt=test_attempt,
+                         package=package,
+                         questions=processed_questions)
 
 @app.route('/submit-answer', methods=['POST'])
 @login_required
@@ -569,10 +572,10 @@ def complete_test():
 @app.route('/test-results/<int:attempt_id>')
 @login_required
 def test_results(attempt_id):
-    test_attempt = TestAttempt.query.get_or_404(attempt_id)
-
-    if test_attempt.user_id != current_user.id:
-        flash('You can only view your own test results.', 'error')
+    """Show test results with Azure image integration"""
+    test_attempt = TestAttempt.query.filter_by(id=attempt_id, user_id=current_user.id).first()
+    if not test_attempt:
+        flash('Test attempt not found or access denied.', 'error')
         return redirect(url_for('dashboard'))
 
     # Get user answers with question details
@@ -584,20 +587,30 @@ def test_results(attempt_id):
         UserAnswer.test_attempt_id == attempt_id
     ).all()
 
-    # Process user answers to include image processing
+    # Process user answers to include Azure image processing
     user_answers = []
     for user_answer, question, selected_option in user_answers_raw:
-        # Get package title for image processing
-        package_title = test_attempt.test_package.title
+        # Get package info for image processing
+        package = test_attempt.test_package
+        package_title = package.title
+        azure_folder_name = package.azure_folder_name if hasattr(package, 'azure_folder_name') else None
 
-        # Process question text for images
+        # Process question text for images (both old and new formats)
         processed_question = Question(
             id=question.id,
             test_package_id=question.test_package_id,
-            question_text=process_text_with_images(question.question_text, package_title),
+            question_text=process_text_with_images(
+                question.question_text, 
+                package_title, 
+                azure_folder_name
+            ),
             question_type=question.question_type,
             domain=question.domain,
-            overall_explanation=process_text_with_images(question.overall_explanation, package_title) if question.overall_explanation else ''
+            overall_explanation=process_text_with_images(
+                question.overall_explanation, 
+                package_title, 
+                azure_folder_name
+            ) if question.overall_explanation else ''
         )
 
         # Process answer options for images
@@ -606,8 +619,16 @@ def test_results(attempt_id):
             processed_option = AnswerOption(
                 id=option.id,
                 question_id=option.question_id,
-                option_text=process_text_with_images(option.option_text, package_title),
-                explanation=process_text_with_images(option.explanation, package_title) if option.explanation else '',
+                option_text=process_text_with_images(
+                    option.option_text, 
+                    package_title, 
+                    azure_folder_name
+                ),
+                explanation=process_text_with_images(
+                    option.explanation, 
+                    package_title, 
+                    azure_folder_name
+                ) if option.explanation else '',
                 is_correct=option.is_correct,
                 option_order=option.option_order
             )
@@ -622,8 +643,16 @@ def test_results(attempt_id):
             processed_selected_option = AnswerOption(
                 id=selected_option.id,
                 question_id=selected_option.question_id,
-                option_text=process_text_with_images(selected_option.option_text, package_title),
-                explanation=process_text_with_images(selected_option.explanation, package_title) if selected_option.explanation else '',
+                option_text=process_text_with_images(
+                    selected_option.option_text, 
+                    package_title, 
+                    azure_folder_name
+                ),
+                explanation=process_text_with_images(
+                    selected_option.explanation, 
+                    package_title, 
+                    azure_folder_name
+                ) if selected_option.explanation else '',
                 is_correct=selected_option.is_correct,
                 option_order=selected_option.option_order
             )
@@ -637,9 +666,12 @@ def test_results(attempt_id):
 @app.route('/admin/import-questions', methods=['GET', 'POST'])
 @login_required
 def import_questions():
+    """Import questions with Azure image processing statistics"""
     if not current_user.is_admin:
         flash('Access denied. Admin privileges required.', 'error')
         return redirect(url_for('dashboard'))
+
+    test_packages = TestPackage.query.filter_by(is_active=True).all()
 
     if request.method == 'POST':
         if 'file' not in request.files:
@@ -647,28 +679,93 @@ def import_questions():
             return redirect(request.url)
 
         file = request.files['file']
+        test_package_id = request.form.get('test_package_id')
+
         if file.filename == '':
             flash('No file selected.', 'error')
             return redirect(request.url)
 
-        if file and file.filename.endswith('.csv'):
-            test_package_id = request.form.get('test_package_id')
+        if not test_package_id:
+            flash('Please select a test package.', 'error')
+            return redirect(request.url)
 
-            if not test_package_id:
-                flash('Please select a test package.', 'error')
-                return redirect(request.url)
-
+        if file and file.filename.lower().endswith('.csv'):
             try:
                 result = import_questions_from_csv(file, int(test_package_id))
-                flash(f'Successfully imported {result["imported"]} questions. Skipped {result["skipped"]} duplicates.', 'success')
+                
+                # Enhanced flash message with image statistics
+                success_msg = f"Import completed: {result['imported']} questions imported"
+                if result['skipped'] > 0:
+                    success_msg += f", {result['skipped']} skipped"
+                
+                # Add image processing statistics
+                image_stats = result['image_stats']
+                if image_stats['total_questions_with_images'] > 0:
+                    success_msg += f". Images: {image_stats['total_questions_with_images']} questions with images"
+                    if image_stats['direct_images'] > 0:
+                        success_msg += f" ({image_stats['direct_images']} new format)"
+                    if image_stats['old_format_images'] > 0:
+                        success_msg += f" ({image_stats['old_format_images']} old format)"
+                
+                # Add Azure integration status
+                package_info = result['package_info']
+                if package_info['uses_azure']:
+                    success_msg += f". Using Azure storage folder: '{package_info['azure_folder_name']}'"
+                else:
+                    success_msg += ". Using local image storage"
+                
+                flash(success_msg, 'success')
+                
             except Exception as e:
                 flash(f'Error importing questions: {str(e)}', 'error')
         else:
-            flash('Please upload a CSV file.', 'error')
+            flash('Invalid file format. Please upload a CSV file.', 'error')
 
-    test_packages = TestPackage.query.all()
+        return redirect(url_for('import_questions'))
+
     return render_template('admin/import_questions.html', test_packages=test_packages)
-
+# NEW: Add image validation route for testing
+@app.route('/admin/validate-images/<int:package_id>')
+@login_required
+def validate_package_images(package_id):
+    """Validate image processing for a specific package (admin only)"""
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    package = TestPackage.query.get_or_404(package_id)
+    azure_folder_name = package.azure_folder_name if hasattr(package, 'azure_folder_name') else None
+    
+    validation_results = []
+    
+    # Validate questions
+    for question in package.questions:
+        question_validation = validate_image_processing(
+            question.question_text,
+            package.title,
+            azure_folder_name
+        )
+        question_validation['question_id'] = question.id
+        question_validation['type'] = 'question'
+        validation_results.append(question_validation)
+        
+        # Validate answer options
+        for option in question.answer_options:
+            option_validation = validate_image_processing(
+                option.option_text,
+                package.title,
+                azure_folder_name
+            )
+            option_validation['question_id'] = question.id
+            option_validation['option_id'] = option.id
+            option_validation['type'] = 'option'
+            validation_results.append(option_validation)
+    
+    return render_template('admin/validate_images.html',
+                         package=package,
+                         validation_results=validation_results,
+                         azure_configured=bool(azure_folder_name))
+                         
 @app.route('/admin/create-package', methods=['POST'])
 @login_required
 def create_package():
@@ -676,26 +773,59 @@ def create_package():
         flash('Access denied. Admin privileges required.', 'error')
         return redirect(url_for('dashboard'))
 
-    title = request.form.get('title')
-    description = request.form.get('description')
-    price = request.form.get('price')
-    domain = request.form.get('domain')
+    title = request.form.get('title', '').strip()
+    description = request.form.get('description', '').strip()
+    price = request.form.get('price', '').strip()
+    domain = request.form.get('domain', '').strip()
+    azure_folder_name = request.form.get('azure_folder_name', '').strip()
 
+    # Validate required fields
     if not all([title, description, price, domain]):
-        flash('All fields are required.', 'error')
+        flash('All required fields must be filled.', 'error')
         return redirect(url_for('import_questions'))
 
     try:
+        price = float(price)
+        if price < 0:
+            flash('Price must be a positive number.', 'error')
+            return redirect(url_for('import_questions'))
+    except ValueError:
+        flash('Invalid price format.', 'error')
+        return redirect(url_for('import_questions'))
+
+    # Validate Azure folder name if provided
+    if azure_folder_name:
+        import re
+        if not re.match(r'^[a-z0-9\-]+$', azure_folder_name):
+            flash('Azure folder name must contain only lowercase letters, numbers, and hyphens.', 'error')
+            return redirect(url_for('import_questions'))
+        
+        if len(azure_folder_name) < 2 or len(azure_folder_name) > 63:
+            flash('Azure folder name must be between 2 and 63 characters.', 'error')
+            return redirect(url_for('import_questions'))
+
+    try:
+        # Create new package
         package = TestPackage(
             title=title,
             description=description,
-            price=float(price),
-            domain=domain
+            price=price,
+            domain=domain,
+            created_by=current_user.id,
+            azure_folder_name=azure_folder_name if azure_folder_name else None
         )
+        
+        # Validate the Azure folder name using model method
+        if azure_folder_name:
+            is_valid, error_message = package.validate_azure_folder_name()
+            if not is_valid:
+                flash(f'Invalid Azure folder name: {error_message}', 'error')
+                return redirect(url_for('import_questions'))
+
         db.session.add(package)
         db.session.commit()
 
-        # Create package-specific image folder
+        # Create package-specific local image folder (as fallback)
         safe_package_name = re.sub(r'[^a-zA-Z0-9\-_]', '_', title.lower().replace(' ', '_'))
         package_image_dir = os.path.join('static', 'images', 'questions', safe_package_name)
         os.makedirs(package_image_dir, exist_ok=True)
@@ -704,30 +834,71 @@ def create_package():
         readme_path = os.path.join(package_image_dir, 'README.md')
         with open(readme_path, 'w') as f:
             f.write(f"# Images for {title}\n\n")
-            f.write(f"This folder contains images used in questions for the '{title}' test package.\n\n")
+            f.write(f"This folder contains backup/fallback images for the '{title}' test package.\n\n")
+            if azure_folder_name:
+                f.write(f"## Azure Integration\n")
+                f.write(f"Primary images are stored in Azure Blob Storage folder: `{azure_folder_name}`\n")
+                f.write(f"This local folder serves as backup when Azure is unavailable.\n\n")
             f.write("## How to Use Images\n\n")
             f.write("1. Upload your image files (PNG, JPG, JPEG, GIF, SVG) to this folder\n")
-            f.write("2. In your CSV file or when creating questions, reference images using this format:\n")
-            f.write("   ```\n   IMAGE: filename.png\n   ```\n\n")
-            f.write("## Supported Formats\n")
-            f.write("- PNG\n- JPG/JPEG\n- GIF\n- SVG\n\n")
-            f.write("## Notes\n")
-            f.write("- Images will be automatically resized to fit properly in the question interface\n")
-            f.write("- Make sure filenames match exactly (case-sensitive)\n")
-            f.write("- Use descriptive filenames for easier management\n")
-            f.write("- Images will be automatically resized to fit properly in the question interface\n")
-            f.write("- Make sure filenames match exactly (case-sensitive)\n")
-            f.write("- Use descriptive filenames for easier management\n")
-            f.write("- Use descriptive filenames for easier management\n")
-            f.write("- Use descriptive filenames for easier management\n")
-            f.write("- Use descriptive filenames for easier management\n")
-            f.write("- Use descriptive filenames for easier management\n")
+            f.write("2. Reference images in questions using direct names: `74f7b4a1b01300dc94f2de0e704e2258`\n")
+            f.write("3. The system will automatically generate proper URLs\n")
 
-        flash('Test package created successfully with dedicated image folder.', 'success')
+        success_message = f'Package "{title}" created successfully!'
+        if azure_folder_name:
+            success_message += f' Azure folder configured: {azure_folder_name}'
+        else:
+            success_message += ' Using local image storage.'
+        
+        flash(success_message, 'success')
+
     except Exception as e:
+        db.session.rollback()
         flash(f'Error creating package: {str(e)}', 'error')
 
     return redirect(url_for('import_questions'))
+
+@app.route('/admin/edit-package/<int:package_id>', methods=['GET', 'POST'])
+@login_required
+def edit_package(package_id):
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    package = TestPackage.query.get_or_404(package_id)
+    
+    if request.method == 'POST':
+        title = request.form.get('title', '').strip()
+        description = request.form.get('description', '').strip()
+        price = request.form.get('price', '').strip()
+        azure_folder_name = request.form.get('azure_folder_name', '').strip()
+        
+        if not all([title, description, price]):
+            flash('All required fields must be filled.', 'error')
+            return render_template('admin/edit_package.html', package=package)
+        
+        try:
+            package.title = title
+            package.description = description
+            package.price = float(price)
+            package.azure_folder_name = azure_folder_name if azure_folder_name else None
+            
+            # Validate Azure folder name
+            if azure_folder_name:
+                is_valid, error_message = package.validate_azure_folder_name()
+                if not is_valid:
+                    flash(f'Invalid Azure folder name: {error_message}', 'error')
+                    return render_template('admin/edit_package.html', package=package)
+            
+            db.session.commit()
+            flash('Package updated successfully!', 'success')
+            return redirect(url_for('import_questions'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error updating package: {str(e)}', 'error')
+    
+    return render_template('admin/edit_package.html', package=package)
 
 @app.route('/admin/manage-questions/<int:package_id>')
 @login_required
@@ -830,6 +1001,73 @@ def add_question(package_id):
         return redirect(url_for('manage_questions', package_id=package_id))
 
     return render_template('admin/add_question.html', package=package)
+
+@app.route('/test-image-direct')
+def test_image_direct():
+    """Direct test of image processing without requiring admin login"""
+    
+    # Your actual sample text with image hash
+    sample_text = """You are building an Azure AI Search custom skill.
+You have the following custom skill schema definition.
+74f7b4a1b01300dc94f2de0e704e2258
+For the following statement, select Yes if the statement is true. Otherwise, select No.
+CompanyDescription is available for indexing."""
+    
+    from utils import process_text_with_images
+    
+    # Test with Azure integration
+    processed_azure = process_text_with_images(sample_text, "AI-102 Package", "ai-102")
+    
+    # Test without Azure (local fallback)
+    processed_local = process_text_with_images(sample_text, "AI-102 Package", None)
+    
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Image Processing Test</title>
+        <style>
+            body {{ font-family: Arial, sans-serif; margin: 40px; }}
+            .test-section {{ margin-bottom: 40px; border: 1px solid #ccc; padding: 20px; }}
+            pre {{ background: #f5f5f5; padding: 15px; overflow-x: auto; }}
+            .azure-url {{ color: #0066cc; }}
+            .local-url {{ color: #cc6600; }}
+        </style>
+    </head>
+    <body>
+        <h1>Image Processing Integration Test</h1>
+        
+        <div class="test-section">
+            <h2>Original Text:</h2>
+            <pre>{sample_text}</pre>
+        </div>
+        
+        <div class="test-section">
+            <h2>Processed with Azure (ai-102 folder):</h2>
+            <div>{processed_azure}</div>
+            <h3>Raw HTML:</h3>
+            <pre>{processed_azure}</pre>
+        </div>
+        
+        <div class="test-section">
+            <h2>Processed without Azure (local fallback):</h2>
+            <div>{processed_local}</div>
+            <h3>Raw HTML:</h3>
+            <pre>{processed_local}</pre>
+        </div>
+        
+        <div class="test-section">
+            <h2>Expected Results:</h2>
+            <ul>
+                <li>Azure version should contain: <span class="azure-url">blob.core.windows.net</span></li>
+                <li>Local version should contain: <span class="local-url">/static/images/</span></li>
+                <li>Both should detect the hash: <code>74f7b4a1b01300dc94f2de0e704e2258</code></li>
+                <li>Both should generate proper HTML img tags</li>
+            </ul>
+        </div>
+    </body>
+    </html>
+    """
 
 @app.route('/admin/delete-question/<int:question_id>', methods=['POST'])
 @login_required

@@ -150,7 +150,9 @@ def get_blob_url(folder_name, image_name, use_cache=True):
             logging.error("Could not extract account name from connection string")
             return None
         
-        # Construct blob name (folder/filename)
+        if not image_name.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.svg')):
+            image_name = f"{image_name}.png"
+        
         blob_name = f"{folder_name}/{image_name}"
         
         # Generate direct URL

@@ -2,90 +2,13 @@ import os
 import logging
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager
+from flask_login import LoginManager, current_user
 from flask_wtf.csrf import CSRFProtect
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-
-try:
-    from azure_storage import init_azure_storage, test_azure_connection
-    AZURE_AVAILABLE = True
-except ImportError:
-    AZURE_AVAILABLE = False
-    logging.warning("Azure storage libraries not installed. Azure image storage disabled.")
-
-# === ADD THIS SECTION AFTER YOUR EMAIL SERVICE INIT ===
-# Initialize Azure Blob Storage
-if AZURE_AVAILABLE:
-    # Add Azure configuration to Flask config
-    app.config['AZURE_STORAGE_CONNECTION_STRING'] = os.environ.get('AZURE_STORAGE_CONNECTION_STRING')
-    app.config['AZURE_STORAGE_CONTAINER_NAME'] = os.environ.get('AZURE_STORAGE_CONTAINER_NAME', 'certification-images')
-    
-    # Initialize Azure storage
-    init_azure_storage(app)
-    
-    # Test connection during startup (in development)
-    if app.debug or os.environ.get('FLASK_ENV') == 'development':
-        with app.app_context():
-            success, message = test_azure_connection()
-            if success:
-                logging.info(f"Azure Storage: {message}")
-            else:
-                logging.warning(f"Azure Storage: {message}")
-else:
-    logging.info("Azure Storage integration disabled - missing azure-storage-blob library")
-
-# === ADD THIS HELPER ROUTE FOR TESTING (OPTIONAL) ===
-@app.route('/admin/test-azure')
-@login_required
-def test_azure_storage():
-    """Admin route to test Azure storage connectivity"""
-    if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    if not AZURE_AVAILABLE:
-        return jsonify({
-            'success': False,
-            'error': 'Azure storage libraries not installed',
-            'instructions': 'Run: pip install azure-storage-blob'
-        })
-    
-    try:
-        from azure_storage import test_azure_connection, get_cache_stats, list_blobs_in_folder
-        
-        # Test connection
-        success, message = test_azure_connection()
-        
-        # Get cache stats
-        cache_stats = get_cache_stats()
-        
-        # Try to list some blobs (if connection works)
-        sample_blobs = {}
-        if success:
-            # Test with common folder names
-            test_folders = ['ai-102', 'az-900', 'aws-clf-002']
-            for folder in test_folders:
-                blobs = list_blobs_in_folder(folder, max_results=3)
-                if blobs:
-                    sample_blobs[folder] = blobs
-        
-        return jsonify({
-            'success': success,
-            'message': message,
-            'cache_stats': cache_stats,
-            'sample_blobs': sample_blobs,
-            'azure_configured': success
-        })
-        
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        })
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 
@@ -108,6 +31,10 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     'pool_pre_ping': True,
     "pool_recycle": 300,
 }
+
+# Azure Storage Configuration (ADD THIS SECTION)
+app.config['AZURE_STORAGE_CONNECTION_STRING'] = os.environ.get('AZURE_STORAGE_CONNECTION_STRING')
+app.config['AZURE_STORAGE_CONTAINER_NAME'] = os.environ.get('AZURE_STORAGE_CONTAINER_NAME', 'certification-images')
 
 # Initialize extensions
 db = SQLAlchemy(model_class=Base)
@@ -148,6 +75,87 @@ def load_user(user_id):
 from email_service import init_mail
 init_mail(app)
 
+# Initialize Azure Blob Storage (ADD THIS SECTION)
+try:
+    from azure_storage import init_azure_storage, test_azure_connection
+    AZURE_AVAILABLE = True
+    
+    # Initialize Azure storage with the Flask app
+    init_azure_storage(app)
+    logging.info("Azure Blob Storage integration initialized")
+    
+    # Test connection in development mode
+    if app.debug or os.environ.get('FLASK_ENV') == 'development':
+        with app.app_context():
+            try:
+                success, message = test_azure_connection()
+                if success:
+                    logging.info(f"Azure Storage: {message}")
+                else:
+                    logging.warning(f"Azure Storage: {message}")
+            except Exception as e:
+                logging.warning(f"Azure Storage test failed: {e}")
+                
+except ImportError:
+    AZURE_AVAILABLE = False
+    logging.info("Azure Storage integration disabled - azure-storage-blob library not found")
+except Exception as e:
+    AZURE_AVAILABLE = False
+    logging.warning(f"Azure Storage initialization failed: {e}")
+
+# Add Azure test route for admins (ADD THIS SECTION)
+@app.route('/admin/test-azure')
+def test_azure_storage():
+    """Admin route to test Azure storage connectivity"""
+    from flask import jsonify, redirect, url_for, flash
+    from flask_login import login_required, current_user
+    
+    if not current_user.is_authenticated:
+        return redirect(url_for('request_otp'))
+    
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    if not AZURE_AVAILABLE:
+        return jsonify({
+            'success': False,
+            'error': 'Azure storage libraries not installed',
+            'instructions': 'Run: pip install azure-storage-blob'
+        })
+    
+    try:
+        from azure_storage import test_azure_connection, get_cache_stats, list_blobs_in_folder
+        
+        # Test connection
+        success, message = test_azure_connection()
+        
+        # Get cache stats
+        cache_stats = get_cache_stats()
+        
+        # Try to list some blobs (if connection works)
+        sample_blobs = {}
+        if success:
+            test_folders = ['ai-102', 'az-900', 'aws-clf-002']
+            for folder in test_folders:
+                blobs = list_blobs_in_folder(folder, max_results=3)
+                if blobs:
+                    sample_blobs[folder] = blobs
+        
+        return jsonify({
+            'success': success,
+            'message': message,
+            'cache_stats': cache_stats,
+            'sample_blobs': sample_blobs,
+            'azure_configured': success
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
 # Create tables and setup initial admin
 with app.app_context():
     import models  # noqa: F401
@@ -164,6 +172,7 @@ with app.app_context():
             if admin_user:
                 # Promote existing user to admin
                 admin_user.is_admin = True
+                admin_user.is_email_verified = True  # Ensure admin can login
                 db.session.commit()
                 logging.info(f"Promoted existing user {admin_email} to admin")
             else:
@@ -173,9 +182,12 @@ with app.app_context():
                     email=admin_email,
                     first_name='Admin',
                     last_name='User',
-                    is_admin=True
+                    is_admin=True,
+                    is_email_verified=True  # Skip email verification for admin
                 )
                 admin_user.set_password(default_password)
                 db.session.add(admin_user)
                 db.session.commit()
                 logging.info(f"Created new admin user: {admin_email}")
+        else:
+            logging.info(f"Admin user already exists: {existing_admin.email}")

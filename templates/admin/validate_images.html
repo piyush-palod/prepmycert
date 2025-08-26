@@ -1,0 +1,226 @@
+<!-- Save this as templates/admin/validate_images.html -->
+{% extends "base.html" %}
+
+{% block title %}Validate Package Images - {{ package.title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <h2><i class="fas fa-images me-2"></i>Image Validation - {{ package.title }}</h2>
+            
+            <!-- Package Info Card -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Package Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Package Title:</strong> {{ package.title }}</p>
+                            <p><strong>Total Questions:</strong> {{ package.questions|length }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            {% if azure_configured %}
+                                <p><strong>Azure Folder:</strong> <span class="badge bg-success">{{ package.azure_folder_name }}</span></p>
+                                <p><strong>Storage Type:</strong> <i class="fas fa-cloud text-primary"></i> Azure Blob Storage</p>
+                            {% else %}
+                                <p><strong>Azure Folder:</strong> <span class="badge bg-warning">Not configured</span></p>
+                                <p><strong>Storage Type:</strong> <i class="fas fa-hdd text-secondary"></i> Local Storage</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Validation Results -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Image Validation Results</h5>
+                </div>
+                <div class="card-body">
+                    {% if validation_results %}
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Question ID</th>
+                                        <th>Type</th>
+                                        <th>Images Detected</th>
+                                        <th>Status</th>
+                                        <th>Generated URLs</th>
+                                        <th>Preview</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for result in validation_results %}
+                                        {% if result.detected_images.total_images > 0 %}
+                                        <tr>
+                                            <td>{{ result.question_id }}</td>
+                                            <td>
+                                                {% if result.type == 'question' %}
+                                                    <span class="badge bg-primary">Question</span>
+                                                {% else %}
+                                                    <span class="badge bg-info">Option {{ result.option_id }}</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <div class="small">
+                                                    {% if result.detected_images.direct_images %}
+                                                        <div><strong>New format:</strong> {{ result.detected_images.direct_images|length }} images</div>
+                                                        {% for img in result.detected_images.direct_images %}
+                                                            <div class="text-muted">• {{ img }}</div>
+                                                        {% endfor %}
+                                                    {% endif %}
+                                                    {% if result.detected_images.old_format_images %}
+                                                        <div><strong>Old format:</strong> {{ result.detected_images.old_format_images|length }} images</div>
+                                                        {% for img in result.detected_images.old_format_images %}
+                                                            <div class="text-muted">• {{ img }}</div>
+                                                        {% endfor %}
+                                                    {% endif %}
+                                                </div>
+                                            </td>
+                                            <td>
+                                                {% if result.valid %}
+                                                    <span class="badge bg-success"><i class="fas fa-check"></i> Valid</span>
+                                                {% else %}
+                                                    <span class="badge bg-danger"><i class="fas fa-times"></i> Invalid</span>
+                                                {% endif %}
+                                                <div class="small text-muted">{{ result.img_tags_count }} img tags generated</div>
+                                            </td>
+                                            <td>
+                                                {% for tag in result.img_tags %}
+                                                    {% set src = tag | regex_replace('.*src="([^"]*)".*', '\\1') %}
+                                                    <div class="small mb-1">
+                                                        {% if 'blob.core.windows.net' in src %}
+                                                            <i class="fas fa-cloud text-primary"></i> 
+                                                            <span class="text-primary">Azure</span>
+                                                        {% else %}
+                                                            <i class="fas fa-hdd text-secondary"></i>
+                                                            <span class="text-secondary">Local</span>
+                                                        {% endif %}
+                                                        <br>
+                                                        <code class="small">{{ src }}</code>
+                                                    </div>
+                                                {% endfor %}
+                                            </td>
+                                            <td>
+                                                {% for tag in result.img_tags %}
+                                                    <div class="mb-2">
+                                                        {{ tag | safe }}
+                                                    </div>
+                                                {% endfor %}
+                                            </td>
+                                        </tr>
+                                        {% endif %}
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Summary Statistics -->
+                        <div class="row mt-4">
+                            <div class="col-md-4">
+                                <div class="card bg-light">
+                                    <div class="card-body text-center">
+                                        <h5 class="card-title">Total Questions</h5>
+                                        <h3 class="text-primary">{{ package.questions|length }}</h3>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card bg-light">
+                                    <div class="card-body text-center">
+                                        <h5 class="card-title">Questions with Images</h5>
+                                        {% set questions_with_images = validation_results | selectattr('detected_images.total_images', '>', 0) | list | length %}
+                                        <h3 class="text-info">{{ questions_with_images }}</h3>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card bg-light">
+                                    <div class="card-body text-center">
+                                        <h5 class="card-title">Validation Status</h5>
+                                        {% set valid_results = validation_results | selectattr('valid') | list | length %}
+                                        {% set total_with_images = validation_results | selectattr('detected_images.total_images', '>', 0) | list | length %}
+                                        {% if total_with_images > 0 %}
+                                            {% if valid_results == total_with_images %}
+                                                <h3 class="text-success"><i class="fas fa-check-circle"></i> All Valid</h3>
+                                            {% else %}
+                                                <h3 class="text-warning">{{ valid_results }}/{{ total_with_images }} Valid</h3>
+                                            {% endif %}
+                                        {% else %}
+                                            <h3 class="text-muted">No Images</h3>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    {% else %}
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            No images found in this package's questions.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="mt-4 mb-4">
+                <a href="{{ url_for('admin_packages') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Packages
+                </a>
+                
+                {% if not azure_configured %}
+                    <a href="{{ url_for('edit_package', package_id=package.id) }}" class="btn btn-primary">
+                        <i class="fas fa-cog me-2"></i>Configure Azure Folder
+                    </a>
+                {% endif %}
+                
+                <a href="{{ url_for('validate_package_images', package_id=package.id) }}" class="btn btn-outline-primary">
+                    <i class="fas fa-refresh me-2"></i>Refresh Validation
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add click handler for image previews
+    const images = document.querySelectorAll('.question-image');
+    images.forEach(img => {
+        img.addEventListener('click', function() {
+            // Create modal or larger preview
+            const modal = document.createElement('div');
+            modal.className = 'modal fade';
+            modal.innerHTML = `
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Image Preview</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body text-center">
+                            <img src="${this.src}" class="img-fluid" alt="${this.alt}">
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            
+            const bsModal = new bootstrap.Modal(modal);
+            bsModal.show();
+            
+            // Clean up modal after hide
+            modal.addEventListener('hidden.bs.modal', function() {
+                document.body.removeChild(modal);
+            });
+        });
+    });
+});
+</script>
+{% endblock %}

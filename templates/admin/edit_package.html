@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Import Questions - Admin{% endblock %}
+{% block content %}
+<div class="container py-4">
+    <h1>Import Questions</h1>
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <div class="mb-3">
+                            <label for="test_package_id" class="form-label">Select Test Package</label>
+                            <select class="form-select" id="test_package_id" name="test_package_id" required>
+                                <option value="">Choose a test package...</option>
+                                {% for package in test_packages %}
+                                <option value="{{ package.id }}">{{ package.title }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="file" class="form-label">CSV File</label>
+                            <input type="file" class="form-control" id="file" name="file" accept=".csv" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Import Questions</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5>Create New Package</h5>
+                    <form method="POST" action="{{ url_for('create_package') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        <div class="mb-3">
+                            <label for="title" class="form-label">Title</label>
+                            <input type="text" class="form-control" id="title" name="title" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea class="form-control" id="description" name="description" required></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="price" class="form-label">Price</label>
+                            <input type="number" class="form-control" id="price" name="price" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="domain" class="form-label">Domain</label>
+                            <input type="text" class="form-control" id="domain" name="domain" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="azure_folder_name" class="form-label">Azure Folder</label>
+                            <input type="text" class="form-control" id="azure_folder_name" name="azure_folder_name" placeholder="ai-102">
+                        </div>
+                        <button type="submit" class="btn btn-success">Create Package</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

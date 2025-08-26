@@ -1,4 +1,3 @@
-
 {% extends "base.html" %}
 
 {% block title %}Import Questions - Admin - PrepMyCert{% endblock %}
@@ -29,12 +28,21 @@
                 </div>
                 <div class="card-body">
                     <form method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <div class="mb-3">
                             <label for="test_package_id" class="form-label">Select Test Package</label>
                             <select class="form-select" id="test_package_id" name="test_package_id" required>
                                 <option value="">Choose a test package...</option>
                                 {% for package in test_packages %}
-                                <option value="{{ package.id }}">{{ package.title }} ({{ package.questions|length }} questions)</option>
+                                <option value="{{ package.id }}">
+                                    {{ package.title }} 
+                                    ({{ package.questions|length }} questions)
+                                    {% if package.azure_folder_name %}
+                                        - Azure: {{ package.azure_folder_name }}
+                                    {% else %}
+                                        - Local storage
+                                    {% endif %}
+                                </option>
                                 {% endfor %}
                             </select>
                             <div class="invalid-feedback">Please select a test package.</div>
@@ -76,6 +84,11 @@
                         <i class="fas fa-info-circle me-2"></i>
                         Questions that already exist in the selected package will be skipped.
                     </div>
+                    <div class="alert alert-warning">
+                        <i class="fas fa-images me-2"></i>
+                        <strong>New Image Format:</strong> Use direct image names like <code>74f7b4a1b01300dc94f2de0e704e2258</code> in your question text. 
+                        Images will be automatically fetched from Azure Blob Storage when the package has an Azure folder configured.
+                    </div>
                 </div>
             </div>
         </div>
@@ -89,6 +102,9 @@
                 </div>
                 <div class="card-body">
                     <form method="POST" action="{{ url_for('create_package') }}" class="needs-validation" novalidate>
+                        <!-- ADD CSRF TOKEN HERE -->
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                        
                         <div class="mb-3">
                             <label for="title" class="form-label">Package Title</label>
                             <input type="text" class="form-control" id="title" name="title" required>
@@ -114,6 +130,18 @@
                             <div class="invalid-feedback">Please provide a domain.</div>
                         </div>
 
+                        <!-- NEW: Azure Folder Configuration -->
+                        <div class="mb-3">
+                            <label for="azure_folder_name" class="form-label">Azure Folder Name</label>
+                            <input type="text" class="form-control" id="azure_folder_name" name="azure_folder_name" 
+                                   placeholder="e.g., ai-102, az-900, aws-clf-002" pattern="^[a-z0-9\-]*$">
+                            <div class="form-text">
+                                <i class="fas fa-cloud me-1"></i>Optional: Specify the Azure Blob Storage folder for images. 
+                                Use lowercase letters, numbers, and hyphens only. Leave blank to use local storage.
+                            </div>
+                            <div class="invalid-feedback">Use only lowercase letters, numbers, and hyphens.</div>
+                        </div>
+
                         <div class="d-grid">
                             <button type="submit" class="btn btn-success">
                                 <i class="fas fa-plus me-2"></i>Create Package
@@ -133,44 +161,45 @@
                     {% if test_packages %}
                         <div class="list-group list-group-flush">
                             {% for package in test_packages %}
-                            <div class="list-group-item d-flex justify-content-between align-items-center px-0">
-                                <div>
+                            <div class="list-group-item d-flex justify-content-between align-items-start px-0">
+                                <div class="flex-grow-1">
                                     <h6 class="mb-1">{{ package.title }}</h6>
-                                    <small class="text-muted">{{ package.questions|length }} questions</small>
+                                    <p class="mb-1 small text-muted">{{ package.questions|length }} questions</p>
+                                    {% if package.azure_folder_name %}
+                                        <span class="badge bg-primary">
+                                            <i class="fas fa-cloud me-1"></i>Azure: {{ package.azure_folder_name }}
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">
+                                            <i class="fas fa-hdd me-1"></i>Local Storage
+                                        </span>
+                                    {% endif %}
                                 </div>
-                                <a href="{{ url_for('manage_questions', package_id=package.id) }}" 
-                                   class="btn btn-outline-primary btn-sm">
-                                    <i class="fas fa-edit"></i> Manage
-                                </a>
+                                <div class="btn-group" role="group">
+                                    <a href="{{ url_for('manage_questions', package_id=package.id) }}" 
+                                       class="btn btn-outline-primary btn-sm">
+                                        <i class="fas fa-edit"></i> Manage
+                                    </a>
+                                    {% if package.azure_folder_name %}
+                                        <a href="{{ url_for('validate_package_images', package_id=package.id) }}" 
+                                           class="btn btn-outline-info btn-sm">
+                                            <i class="fas fa-images"></i> Images
+                                        </a>
+                                    {% endif %}
+                                </div>
                             </div>
                             {% endfor %}
                         </div>
                     {% else %}
-                        <p class="text-muted">No test packages available. Create one above to get started.</p>
+                        <div class="text-center py-4">
+                            <i class="fas fa-box text-muted mb-2" style="font-size: 2rem;"></i>
+                            <p class="text-muted">No test packages available. Create your first package above!</p>
+                        </div>
                     {% endif %}
-                </div>
-            </div>
-            
-            <div class="card mt-4">
-                <div class="card-header">
-                    <h6 class="mb-0">
-                        <i class="fas fa-info-circle me-2"></i>Image Support
-                    </h6>
-                </div>
-                <div class="card-body">
-                    <p class="small">To include images in your questions:</p>
-                    <ol class="small">
-                        <li>Upload images to <code>/static/images/questions/[package_name]/</code></li>
-                        <li>Use <code>IMAGE: filename.png</code> in your CSV or question text</li>
-                        <li>Each package gets its own image folder automatically</li>
-                    </ol>
-                    <div class="alert alert-warning alert-sm">
-                        <i class="fas fa-exclamation-triangle me-1"></i>
-                        <small>Package names are converted to safe folder names (spaces become underscores, special characters removed)</small>
-                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
 {% endblock %}
+
