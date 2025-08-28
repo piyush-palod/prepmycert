@@ -1,24 +1,36 @@
+"""
+Enhanced Routes for PrepMyCert - Compatible with existing system
+"""
+
 import os
 import re
 import stripe
+import json
 from flask import render_template, request, redirect, url_for, flash, session, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
-from app import app, db
-from models import User, TestPackage, Question, AnswerOption, UserPurchase, TestAttempt, UserAnswer, Bundle, Coupon
-from utils import import_questions_from_csv, process_text_with_images, validate_image_processing
-from datetime import datetime
 from werkzeug.utils import secure_filename
-from flask import render_template, request, redirect, url_for, flash, session, jsonify
+from datetime import datetime
+import pandas as pd
 
+from app import app, db
+from models import (
+    User, TestPackage, Question, AnswerOption, UserPurchase, 
+    TestAttempt, UserAnswer, Bundle, Coupon
+)
+from utils import import_questions_from_csv
 
 # Configure Stripe
 stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
 
+# =============================================================================
+# PUBLIC ROUTES
+# =============================================================================
+
 @app.route('/')
 def index():
+    """Homepage with active test packages and bundles"""
     test_packages = TestPackage.query.filter_by(is_active=True).all()
-    from models import Bundle
-    bundles = Bundle.query.filter_by(is_active=True).limit(3).all()  # Show top 3 bundles
+    bundles = Bundle.query.filter_by(is_active=True).limit(3).all()
     return render_template('index.html', test_packages=test_packages, bundles=bundles)
 
 # Legacy routes - redirect to new OTP-based authentication
@@ -39,9 +51,14 @@ def logout():
     flash('You have been logged out.', 'info')
     return redirect(url_for('index'))
 
+# =============================================================================
+# USER DASHBOARD
+# =============================================================================
+
 @app.route('/dashboard')
 @login_required
 def dashboard():
+    """User dashboard"""
     # Get user's purchased packages (excluding bundle items)
     purchased_packages = db.session.query(TestPackage).join(UserPurchase).filter(
         UserPurchase.user_id == current_user.id,
@@ -50,7 +67,6 @@ def dashboard():
     ).all()
 
     # Get user's purchased bundles
-    from models import Bundle
     purchased_bundles = db.session.query(Bundle).join(UserPurchase).filter(
         UserPurchase.user_id == current_user.id,
         UserPurchase.bundle_id.isnot(None)
@@ -74,365 +90,43 @@ def dashboard():
                          all_accessible_packages=all_accessible_packages,
                          recent_attempts=recent_attempts)
 
+# =============================================================================
+# TEST PACKAGE ROUTES
+# =============================================================================
+
 @app.route('/test-packages')
 def test_packages():
+    """Browse all available test packages"""
     packages = TestPackage.query.filter_by(is_active=True).all()
     return render_template('test_packages.html', packages=packages)
 
-@app.route('/bundles')
-def bundles():
-    from models import Bundle
-    bundles = Bundle.query.filter_by(is_active=True).all()
-    return render_template('bundles.html', bundles=bundles)
-
-@app.route('/bundle/<int:bundle_id>')
-def view_bundle(bundle_id):
-    from models import Bundle
-    bundle = Bundle.query.get_or_404(bundle_id)
-
-    # Check if user has purchased this bundle or has access to all packages
-    has_bundle_access = False
-    individual_access = {}
-
-    if current_user.is_authenticated:
-        # Check for direct bundle purchase
-        bundle_purchase = UserPurchase.query.filter_by(
-            user_id=current_user.id,
-            bundle_id=bundle_id
-        ).first()
-        has_bundle_access = bundle_purchase is not None
-
-        # Check individual package access
-        for bp in bundle.bundle_packages:
-            package_purchase = UserPurchase.query.filter_by(
-                user_id=current_user.id,
-                test_package_id=bp.test_package_id
-            ).first()
-            individual_access[bp.test_package_id] = package_purchase is not None
-
-    return render_template('bundle_detail.html', 
-                         bundle=bundle, 
-                         has_bundle_access=has_bundle_access,
-                         individual_access=individual_access)
-
-@app.route('/package/<int:package_id>')
-def package_detail(package_id):
+@app.route('/test-package/<int:package_id>')
+def test_package_detail(package_id):
+    """Test package detail page"""
     package = TestPackage.query.get_or_404(package_id)
-
-    # Check if user has purchased this package
-    has_purchased = False
+    
+    # Check if user has access
+    has_access = False
     if current_user.is_authenticated:
         purchase = UserPurchase.query.filter_by(
             user_id=current_user.id,
             test_package_id=package_id
         ).first()
-        has_purchased = purchase is not None
+        has_access = purchase is not None
+    
+    return render_template('test_package_detail.html', package=package, has_access=has_access)
 
-    return render_template('package_detail.html', package=package, has_purchased=has_purchased)
-
-@app.route('/create-checkout-session', methods=['POST'])
-@login_required
-def create_checkout_session():
-    package_id = request.form.get('package_id')
-    bundle_id = request.form.get('bundle_id')
-    coupon_code = request.form.get('coupon_code', '').upper().strip()
-
-    # Determine if it's a package or bundle purchase
-    if bundle_id:
-        from models import Bundle, BundlePackage
-        bundle = Bundle.query.get_or_404(bundle_id)
-
-        # Check if user already has access to all packages in bundle
-        package_ids = [bp.test_package_id for bp in bundle.bundle_packages]
-        existing_purchases = UserPurchase.query.filter(
-            UserPurchase.user_id == current_user.id,
-            UserPurchase.test_package_id.in_(package_ids)
-        ).all()
-
-        if len(existing_purchases) == len(package_ids):
-            flash('You already have access to all packages in this bundle.', 'info')
-            return redirect(url_for('view_bundle', bundle_id=bundle_id))
-
-        item_title = bundle.title
-        item_description = bundle.description
-        original_amount = bundle.price
-        purchase_type = 'bundle'
-
-    else:
-        package = TestPackage.query.get_or_404(package_id)
-
-        # Check if user already purchased this package
-        existing_purchase = UserPurchase.query.filter_by(
-            user_id=current_user.id,
-            test_package_id=package_id
-        ).first()
-
-        if existing_purchase:
-            flash('You have already purchased this package.', 'info')
-            return redirect(url_for('package_detail', package_id=package_id))
-
-        item_title = package.title
-        item_description = package.description
-        original_amount = package.price
-        purchase_type = 'package'
-
-    # Apply coupon if provided
-    discount_amount = 0
-    final_amount = original_amount
-    coupon = None
-
-    if coupon_code:
-        from models import Coupon
-        coupon = Coupon.query.filter_by(code=coupon_code).first()
-        if coupon:
-            is_valid, message = coupon.is_valid(current_user.id, original_amount)
-            if is_valid:
-                discount_amount = coupon.calculate_discount(original_amount)
-                final_amount = original_amount - discount_amount
-            else:
-                flash(f'Coupon error: {message}', 'error')
-                return redirect(request.referrer or url_for('index'))
-        else:
-            flash('Invalid coupon code.', 'error')
-            return redirect(request.referrer or url_for('index'))
-
-    try:
-        # Get domain for success/cancel URLs
-        domain = os.environ.get('REPLIT_DEV_DOMAIN')
-        if not domain:
-            domain = request.host
-
-        # Create line items for checkout
-        line_items = [{
-            'price_data': {
-                'currency': 'usd',
-                'product_data': {
-                    'name': item_title,
-                    'description': item_description[:100] + '...' if len(item_description) > 100 else item_description,
-                },
-                'unit_amount': int(final_amount * 100),  # Convert to cents
-            },
-            'quantity': 1,
-        }]
-
-        # Add discount line item if applicable
-        if discount_amount > 0:
-            line_items.append({
-                'price_data': {
-                    'currency': 'usd',
-                    'product_data': {
-                        'name': f'Discount ({coupon_code})',
-                    },
-                    'unit_amount': -int(discount_amount * 100),  # Negative amount for discount
-                },
-                'quantity': 1,
-            })
-
-        metadata = {
-            'user_id': current_user.id,
-            'purchase_type': purchase_type,
-            'original_amount': str(original_amount),
-            'discount_amount': str(discount_amount),
-        }
-
-        if bundle_id:
-            metadata['bundle_id'] = bundle_id
-            success_url = f'https://{domain}/payment-success?session_id={{CHECKOUT_SESSION_ID}}&bundle_id={bundle_id}'
-            cancel_url = f'https://{domain}/payment-cancel?bundle_id={bundle_id}'
-        else:
-            metadata['package_id'] = package_id
-            success_url = f'https://{domain}/payment-success?session_id={{CHECKOUT_SESSION_ID}}&package_id={package_id}'
-            cancel_url = f'https://{domain}/payment-cancel?package_id={package_id}'
-
-        if coupon_code:
-            metadata['coupon_code'] = coupon_code
-
-        checkout_session = stripe.checkout.Session.create(
-            payment_method_types=['card'],
-            line_items=line_items,
-            mode='payment',
-            success_url=success_url,
-            cancel_url=cancel_url,
-            metadata=metadata
-        )
-
-        return redirect(checkout_session.url, code=303)
-
-    except Exception as e:
-        flash(f'Payment processing error: {str(e)}', 'error')
-        if bundle_id:
-            return redirect(url_for('view_bundle', bundle_id=bundle_id))
-        else:
-            return redirect(url_for('package_detail', package_id=package_id))
-
-@app.route('/payment-success')
-@login_required
-def payment_success():
-    session_id = request.args.get('session_id')
-    package_id = request.args.get('package_id')
-    bundle_id = request.args.get('bundle_id')
-
-    if not session_id or (not package_id and not bundle_id):
-        flash('Invalid payment session.', 'error')
-        return redirect(url_for('dashboard'))
-
-    try:
-        # Retrieve the session from Stripe
-        session = stripe.checkout.Session.retrieve(session_id)
-
-        if session.payment_status == 'paid':
-            metadata = session.metadata
-            purchase_type = metadata.get('purchase_type', 'package')
-            original_amount = float(metadata.get('original_amount', 0))
-            discount_amount = float(metadata.get('discount_amount', 0))
-            coupon_code = metadata.get('coupon_code')
-
-            if purchase_type == 'bundle' and bundle_id:
-                from models import Bundle, BundlePackage, Coupon, CouponUsage
-
-                # Check if bundle purchase already recorded
-                existing_purchase = UserPurchase.query.filter_by(
-                    user_id=current_user.id,
-                    bundle_id=bundle_id,
-                    stripe_payment_intent_id=session.payment_intent
-                ).first()
-
-                if not existing_purchase:
-                    bundle = Bundle.query.get(bundle_id)
-
-                    # Record the bundle purchase
-                    purchase = UserPurchase(
-                        user_id=current_user.id,
-                        bundle_id=bundle_id,
-                        stripe_payment_intent_id=session.payment_intent,
-                        amount_paid=session.amount_total / 100,
-                        original_amount=original_amount,
-                        discount_amount=discount_amount,
-                        coupon_code=coupon_code,
-                        purchase_type='bundle'
-                    )
-                    db.session.add(purchase)
-                    db.session.flush()  # Get purchase ID
-
-                    # Record individual package access
-                    for bp in bundle.bundle_packages:
-                        # Check if user already has this package
-                        existing_pkg_purchase = UserPurchase.query.filter_by(
-                            user_id=current_user.id,
-                            test_package_id=bp.test_package_id
-                        ).first()
-
-                        if not existing_pkg_purchase:
-                            pkg_purchase = UserPurchase(
-                                user_id=current_user.id,
-                                test_package_id=bp.test_package_id,
-                                stripe_payment_intent_id=session.payment_intent,
-                                amount_paid=0,  # Individual packages in bundle have no separate cost
-                                original_amount=bp.test_package.price,
-                                discount_amount=bp.test_package.price,  # Full discount as part of bundle
-                                purchase_type='bundle_item'
-                            )
-                            db.session.add(pkg_purchase)
-
-                    # Handle coupon usage
-                    if coupon_code and discount_amount > 0:
-                        coupon = Coupon.query.filter_by(code=coupon_code).first()
-                        if coupon:
-                            coupon.used_count += 1
-
-                            coupon_usage = CouponUsage(
-                                coupon_id=coupon.id,
-                                user_id=current_user.id,
-                                purchase_id=purchase.id,
-                                discount_amount=discount_amount
-                            )
-                            db.session.add(coupon_usage)
-
-                    db.session.commit()
-
-                    # Send purchase confirmation email
-                    from email_service import send_purchase_confirmation_email
-                    send_purchase_confirmation_email(
-                        current_user.email, 
-                        bundle.title, 
-                        session.amount_total / 100
-                    )
-
-                    flash(f'Payment successful! You now have lifetime access to all {bundle.package_count} packages in {bundle.title}.', 'success')
-                else:
-                    flash('You already have access to this bundle.', 'info')
-
-            else:
-                # Single package purchase
-                from models import Coupon, CouponUsage
-
-                existing_purchase = UserPurchase.query.filter_by(
-                    user_id=current_user.id,
-                    test_package_id=package_id,
-                    stripe_payment_intent_id=session.payment_intent
-                ).first()
-
-                if not existing_purchase:
-                    package = TestPackage.query.get(package_id)
-                    purchase = UserPurchase(
-                        user_id=current_user.id,
-                        test_package_id=package_id,
-                        stripe_payment_intent_id=session.payment_intent,
-                        amount_paid=session.amount_total / 100,
-                        original_amount=original_amount,
-                        discount_amount=discount_amount,
-                        coupon_code=coupon_code,
-                        purchase_type='package'
-                    )
-                    db.session.add(purchase)
-                    db.session.flush()  # Get purchase ID
-
-                    # Handle coupon usage
-                    if coupon_code and discount_amount > 0:
-                        coupon = Coupon.query.filter_by(code=coupon_code).first()
-                        if coupon:
-                            coupon.used_count += 1
-
-                            coupon_usage = CouponUsage(
-                                coupon_id=coupon.id,
-                                user_id=current_user.id,
-                                purchase_id=purchase.id,
-                                discount_amount=discount_amount
-                            )
-                            db.session.add(coupon_usage)
-
-                    db.session.commit()
-
-                    # Send purchase confirmation email
-                    from email_service import send_purchase_confirmation_email
-                    send_purchase_confirmation_email(
-                        current_user.email, 
-                        package.title, 
-                        session.amount_total / 100
-                    )
-
-                    flash(f'Payment successful! You now have lifetime access to {package.title}.', 'success')
-                else:
-                    flash('You already have access to this package.', 'info')
-        else:
-            flash('Payment was not completed successfully.', 'error')
-
-    except Exception as e:
-        flash(f'Error processing payment: {str(e)}', 'error')
-
-    return render_template('payment_success.html')
-
-@app.route('/payment-cancel')
-def payment_cancel():
-    package_id = request.args.get('package_id')
-    flash('Payment was cancelled.', 'info')
-    return render_template('payment_cancel.html', package_id=package_id)
+# =============================================================================
+# TEST TAKING SYSTEM (Enhanced with Zero Runtime Processing)
+# =============================================================================
 
 @app.route('/take-test/<int:package_id>')
 @login_required
 def take_test(package_id):
-    """Take a test with Azure image integration"""
-    # Check if user has purchased this package
+    """Enhanced test taking interface with pre-processed content"""
+    package = TestPackage.query.get_or_404(package_id)
+    
+    # Verify user has access
     purchase = UserPurchase.query.filter_by(
         user_id=current_user.id,
         test_package_id=package_id
@@ -440,753 +134,420 @@ def take_test(package_id):
     
     if not purchase:
         flash('You need to purchase this test package first.', 'error')
-        return redirect(url_for('test_packages'))
+        return redirect(url_for('test_package_detail', package_id=package_id))
     
-    package = TestPackage.query.get_or_404(package_id)
-    questions = package.questions
+    # Get all questions (content is already pre-processed)
+    questions = Question.query.filter_by(test_package_id=package_id).all()
     
     if not questions:
-        flash('This test package has no questions yet.', 'warning')
+        flash('This test package has no questions yet.', 'error')
         return redirect(url_for('dashboard'))
     
     # Create new test attempt
     test_attempt = TestAttempt(
         user_id=current_user.id,
         test_package_id=package_id,
-        total_questions=len(questions)
+        start_time=datetime.utcnow()
     )
+    
     db.session.add(test_attempt)
     db.session.commit()
     
-    # Process questions for Azure images
-    processed_questions = []
-    for question in questions:
-        processed_question_text = process_text_with_images(
-            question.question_text,
-            package.title,
-            package.azure_folder_name if hasattr(package, 'azure_folder_name') else None
-        )
-        
-        processed_options = []
-        for option in question.answer_options:
-            processed_option_text = process_text_with_images(
-                option.option_text,
-                package.title,
-                package.azure_folder_name if hasattr(package, 'azure_folder_name') else None
-            )
-            
-            processed_options.append({
-                'id': option.id,
-                'text': processed_option_text,
-                'order': option.option_order
-            })
-        
-        processed_questions.append({
-            'id': question.id,
-            'text': processed_question_text,
-            'type': question.question_type,
-            'domain': question.domain,
-            'options': processed_options
-        })
+    # Store test attempt ID in session
+    session['current_test_attempt'] = test_attempt.id
     
     return render_template('take_test.html', 
-                         test_attempt=test_attempt,
                          package=package,
-                         questions=processed_questions)
+                         questions=questions,
+                         test_attempt=test_attempt)
 
-@app.route('/submit-answer', methods=['POST'])
+@app.route('/submit-test', methods=['POST'])
 @login_required
-def submit_answer():
-    test_attempt_id = session.get('test_attempt_id')
+def submit_test():
+    """Submit test with enhanced scoring"""
+    test_attempt_id = session.get('current_test_attempt')
+    
     if not test_attempt_id:
-        return jsonify({'error': 'No active test session'}), 400
-
-    question_id = request.json.get('question_id')
-    selected_option_id = request.json.get('selected_option_id')
-
-    test_attempt = TestAttempt.query.get(test_attempt_id)
-    if not test_attempt or test_attempt.user_id != current_user.id:
-        return jsonify({'error': 'Invalid test attempt'}), 400
-
-    # Check if answer already exists
-    existing_answer = UserAnswer.query.filter_by(
-        test_attempt_id=test_attempt_id,
-        question_id=question_id
-    ).first()
-
-    if existing_answer:
-        # Update existing answer
-        existing_answer.selected_option_id = selected_option_id
-        selected_option = AnswerOption.query.get(selected_option_id)
-        existing_answer.is_correct = selected_option.is_correct if selected_option else False
-        existing_answer.answered_at = datetime.utcnow()
-    else:
-        # Create new answer
-        selected_option = AnswerOption.query.get(selected_option_id)
-        user_answer = UserAnswer(
-            test_attempt_id=test_attempt_id,
-            question_id=question_id,
-            selected_option_id=selected_option_id,
-            is_correct=selected_option.is_correct if selected_option else False
-        )
-        db.session.add(user_answer)
-
-    db.session.commit()
-
-    return jsonify({'success': True})
-
-@app.route('/complete-test', methods=['POST'])
-@login_required
-def complete_test():
-    test_attempt_id = session.get('test_attempt_id')
-    if not test_attempt_id:
-        return jsonify({'error': 'No active test session'}), 400
-
-    test_attempt = TestAttempt.query.get(test_attempt_id)
-    if not test_attempt or test_attempt.user_id != current_user.id:
-        return jsonify({'error': 'Invalid test attempt'}), 400
-
-    # Calculate score
-    correct_answers = UserAnswer.query.filter_by(
-        test_attempt_id=test_attempt_id,
-        is_correct=True
-    ).count()
-
-    total_questions = test_attempt.total_questions
-    score = (correct_answers / total_questions) * 100 if total_questions > 0 else 0
-
-    # Update test attempt
-    test_attempt.correct_answers = correct_answers
-    test_attempt.score = score
+        flash('Invalid test session.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    test_attempt = TestAttempt.query.get_or_404(test_attempt_id)
+    
+    # Verify ownership
+    if test_attempt.user_id != current_user.id:
+        flash('Unauthorized access.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    # Process answers
+    total_questions = 0
+    correct_answers = 0
+    
+    for key, value in request.form.items():
+        if key.startswith('question_'):
+            question_id = int(key.replace('question_', ''))
+            question = Question.query.get(question_id)
+            
+            if not question:
+                continue
+            
+            total_questions += 1
+            
+            # Handle different question types
+            is_correct = False
+            
+            # Check if it's multiple choice or true/false
+            if value.isdigit():
+                selected_option_id = int(value)
+                option = AnswerOption.query.get(selected_option_id)
+                if option and option.is_correct:
+                    is_correct = True
+                
+                # Create user answer record
+                user_answer = UserAnswer(
+                    test_attempt_id=test_attempt.id,
+                    question_id=question_id,
+                    answer_option_id=selected_option_id,
+                    is_correct=is_correct
+                )
+            else:
+                # Handle text-based answers (fill-in-blanks, code completion)
+                # For now, simple text comparison (can be enhanced later)
+                user_answer = UserAnswer(
+                    test_attempt_id=test_attempt.id,
+                    question_id=question_id,
+                    is_correct=False  # Will be manually graded or enhanced later
+                )
+                
+                # If question has text_answer field, store it
+                if hasattr(user_answer, 'text_answer'):
+                    user_answer.text_answer = value
+            
+            if is_correct:
+                correct_answers += 1
+            
+            db.session.add(user_answer)
+    
+    # Complete the test attempt
     test_attempt.end_time = datetime.utcnow()
     test_attempt.is_completed = True
-
+    
+    # Calculate score
+    if total_questions > 0:
+        score_percentage = (correct_answers / total_questions) * 100
+        test_attempt.score_percentage = score_percentage
+        
+        # Update enhanced fields if they exist
+        if hasattr(test_attempt, 'total_questions'):
+            test_attempt.total_questions = total_questions
+        if hasattr(test_attempt, 'correct_answers'):
+            test_attempt.correct_answers = correct_answers
+    
     db.session.commit()
-
+    
     # Clear session
-    session.pop('test_attempt_id', None)
-    session.pop('current_question_index', None)
-
-    return redirect(url_for('test_results', attempt_id=test_attempt_id))
+    session.pop('current_test_attempt', None)
+    
+    return redirect(url_for('test_results', attempt_id=test_attempt.id))
 
 @app.route('/test-results/<int:attempt_id>')
 @login_required
 def test_results(attempt_id):
-    """Show test results with Azure image integration"""
-    test_attempt = TestAttempt.query.filter_by(id=attempt_id, user_id=current_user.id).first()
-    if not test_attempt:
-        flash('Test attempt not found or access denied.', 'error')
+    """Enhanced test results"""
+    attempt = TestAttempt.query.get_or_404(attempt_id)
+    
+    # Verify ownership
+    if attempt.user_id != current_user.id:
+        flash('Unauthorized access.', 'error')
         return redirect(url_for('dashboard'))
-
-    # Get user answers with question details
-    user_answers_raw = db.session.query(UserAnswer, Question, AnswerOption).join(
-        Question, UserAnswer.question_id == Question.id
-    ).outerjoin(
-        AnswerOption, UserAnswer.selected_option_id == AnswerOption.id
-    ).filter(
-        UserAnswer.test_attempt_id == attempt_id
-    ).all()
-
-    # Process user answers to include Azure image processing
-    user_answers = []
-    for user_answer, question, selected_option in user_answers_raw:
-        # Get package info for image processing
-        package = test_attempt.test_package
-        package_title = package.title
-        azure_folder_name = package.azure_folder_name if hasattr(package, 'azure_folder_name') else None
-
-        # Process question text for images (both old and new formats)
-        processed_question = Question(
-            id=question.id,
-            test_package_id=question.test_package_id,
-            question_text=process_text_with_images(
-                question.question_text, 
-                package_title, 
-                azure_folder_name
-            ),
-            question_type=question.question_type,
-            domain=question.domain,
-            overall_explanation=process_text_with_images(
-                question.overall_explanation, 
-                package_title, 
-                azure_folder_name
-            ) if question.overall_explanation else ''
-        )
-
-        # Process answer options for images
-        processed_options = []
-        for option in question.answer_options:
-            processed_option = AnswerOption(
-                id=option.id,
-                question_id=option.question_id,
-                option_text=process_text_with_images(
-                    option.option_text, 
-                    package_title, 
-                    azure_folder_name
-                ),
-                explanation=process_text_with_images(
-                    option.explanation, 
-                    package_title, 
-                    azure_folder_name
-                ) if option.explanation else '',
-                is_correct=option.is_correct,
-                option_order=option.option_order
-            )
-            processed_options.append(processed_option)
-
-        # Attach processed options to processed question
-        processed_question.answer_options = processed_options
-
-        # Process selected option if it exists
-        processed_selected_option = None
-        if selected_option:
-            processed_selected_option = AnswerOption(
-                id=selected_option.id,
-                question_id=selected_option.question_id,
-                option_text=process_text_with_images(
-                    selected_option.option_text, 
-                    package_title, 
-                    azure_folder_name
-                ),
-                explanation=process_text_with_images(
-                    selected_option.explanation, 
-                    package_title, 
-                    azure_folder_name
-                ) if selected_option.explanation else '',
-                is_correct=selected_option.is_correct,
-                option_order=selected_option.option_order
-            )
-
-        user_answers.append((user_answer, processed_question, processed_selected_option))
-
+    
+    # Get detailed results
+    user_answers = UserAnswer.query.filter_by(
+        test_attempt_id=attempt_id
+    ).join(Question).all()
+    
     return render_template('test_results.html', 
-                         test_attempt=test_attempt,
+                         attempt=attempt,
                          user_answers=user_answers)
 
-@app.route('/admin/import-questions', methods=['GET', 'POST'])
+# =============================================================================
+# ADMIN INTERFACE
+# =============================================================================
+
+@app.route('/admin')
 @login_required
-def import_questions():
-    """Import questions with Azure image processing statistics"""
-    if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.', 'error')
-        return redirect(url_for('dashboard'))
-
-    test_packages = TestPackage.query.filter_by(is_active=True).all()
-
-    if request.method == 'POST':
-        if 'file' not in request.files:
-            flash('No file selected.', 'error')
-            return redirect(request.url)
-
-        file = request.files['file']
-        test_package_id = request.form.get('test_package_id')
-
-        if file.filename == '':
-            flash('No file selected.', 'error')
-            return redirect(request.url)
-
-        if not test_package_id:
-            flash('Please select a test package.', 'error')
-            return redirect(request.url)
-
-        if file and file.filename.lower().endswith('.csv'):
-            try:
-                result = import_questions_from_csv(file, int(test_package_id))
-                
-                # Enhanced flash message with image statistics
-                success_msg = f"Import completed: {result['imported']} questions imported"
-                if result['skipped'] > 0:
-                    success_msg += f", {result['skipped']} skipped"
-                
-                # Add image processing statistics
-                image_stats = result['image_stats']
-                if image_stats['total_questions_with_images'] > 0:
-                    success_msg += f". Images: {image_stats['total_questions_with_images']} questions with images"
-                    if image_stats['direct_images'] > 0:
-                        success_msg += f" ({image_stats['direct_images']} new format)"
-                    if image_stats['old_format_images'] > 0:
-                        success_msg += f" ({image_stats['old_format_images']} old format)"
-                
-                # Add Azure integration status
-                package_info = result['package_info']
-                if package_info['uses_azure']:
-                    success_msg += f". Using Azure storage folder: '{package_info['azure_folder_name']}'"
-                else:
-                    success_msg += ". Using local image storage"
-                
-                flash(success_msg, 'success')
-                
-            except Exception as e:
-                flash(f'Error importing questions: {str(e)}', 'error')
-        else:
-            flash('Invalid file format. Please upload a CSV file.', 'error')
-
-        return redirect(url_for('import_questions'))
-
-    return render_template('admin/import_questions.html', test_packages=test_packages)
-# NEW: Add image validation route for testing
-@app.route('/admin/validate-images/<int:package_id>')
-@login_required
-def validate_package_images(package_id):
-    """Validate image processing for a specific package (admin only)"""
+def admin_dashboard():
+    """Admin dashboard"""
     if not current_user.is_admin:
         flash('Access denied. Admin privileges required.', 'error')
         return redirect(url_for('dashboard'))
     
-    package = TestPackage.query.get_or_404(package_id)
-    azure_folder_name = package.azure_folder_name if hasattr(package, 'azure_folder_name') else None
+    # Get basic statistics
+    stats = {
+        'total_users': User.query.count(),
+        'total_packages': TestPackage.query.count(),
+        'active_packages': TestPackage.query.filter_by(is_active=True).count(),
+        'total_questions': Question.query.count(),
+        'total_attempts': TestAttempt.query.filter_by(is_completed=True).count(),
+    }
     
-    validation_results = []
+    # Get recent activity
+    recent_packages = TestPackage.query.order_by(
+        TestPackage.created_at.desc()
+    ).limit(5).all()
     
-    # Validate questions
-    for question in package.questions:
-        question_validation = validate_image_processing(
-            question.question_text,
-            package.title,
-            azure_folder_name
-        )
-        question_validation['question_id'] = question.id
-        question_validation['type'] = 'question'
-        validation_results.append(question_validation)
-        
-        # Validate answer options
-        for option in question.answer_options:
-            option_validation = validate_image_processing(
-                option.option_text,
-                package.title,
-                azure_folder_name
-            )
-            option_validation['question_id'] = question.id
-            option_validation['option_id'] = option.id
-            option_validation['type'] = 'option'
-            validation_results.append(option_validation)
+    recent_attempts = TestAttempt.query.filter_by(
+        is_completed=True
+    ).order_by(TestAttempt.end_time.desc()).limit(10).all()
     
-    return render_template('admin/validate_images.html',
-                         package=package,
-                         validation_results=validation_results,
-                         azure_configured=bool(azure_folder_name))
-                         
-@app.route('/admin/create-package', methods=['POST'])
-@login_required
-def create_package():
-    if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.', 'error')
-        return redirect(url_for('dashboard'))
-
-    title = request.form.get('title', '').strip()
-    description = request.form.get('description', '').strip()
-    price = request.form.get('price', '').strip()
-    domain = request.form.get('domain', '').strip()
-    azure_folder_name = request.form.get('azure_folder_name', '').strip()
-
-    # Validate required fields
-    if not all([title, description, price, domain]):
-        flash('All required fields must be filled.', 'error')
-        return redirect(url_for('import_questions'))
-
-    try:
-        price = float(price)
-        if price < 0:
-            flash('Price must be a positive number.', 'error')
-            return redirect(url_for('import_questions'))
-    except ValueError:
-        flash('Invalid price format.', 'error')
-        return redirect(url_for('import_questions'))
-
-    # Validate Azure folder name if provided
-    if azure_folder_name:
-        import re
-        if not re.match(r'^[a-z0-9\-]+$', azure_folder_name):
-            flash('Azure folder name must contain only lowercase letters, numbers, and hyphens.', 'error')
-            return redirect(url_for('import_questions'))
-        
-        if len(azure_folder_name) < 2 or len(azure_folder_name) > 63:
-            flash('Azure folder name must be between 2 and 63 characters.', 'error')
-            return redirect(url_for('import_questions'))
-
-    try:
-        # Create new package
-        package = TestPackage(
-            title=title,
-            description=description,
-            price=price,
-            domain=domain,
-            created_by=current_user.id,
-            azure_folder_name=azure_folder_name if azure_folder_name else None
-        )
-        
-        # Validate the Azure folder name using model method
-        if azure_folder_name:
-            is_valid, error_message = package.validate_azure_folder_name()
-            if not is_valid:
-                flash(f'Invalid Azure folder name: {error_message}', 'error')
-                return redirect(url_for('import_questions'))
-
-        db.session.add(package)
-        db.session.commit()
-
-        # Create package-specific local image folder (as fallback)
-        safe_package_name = re.sub(r'[^a-zA-Z0-9\-_]', '_', title.lower().replace(' ', '_'))
-        package_image_dir = os.path.join('static', 'images', 'questions', safe_package_name)
-        os.makedirs(package_image_dir, exist_ok=True)
-
-        # Create a README file in the package folder
-        readme_path = os.path.join(package_image_dir, 'README.md')
-        with open(readme_path, 'w') as f:
-            f.write(f"# Images for {title}\n\n")
-            f.write(f"This folder contains backup/fallback images for the '{title}' test package.\n\n")
-            if azure_folder_name:
-                f.write(f"## Azure Integration\n")
-                f.write(f"Primary images are stored in Azure Blob Storage folder: `{azure_folder_name}`\n")
-                f.write(f"This local folder serves as backup when Azure is unavailable.\n\n")
-            f.write("## How to Use Images\n\n")
-            f.write("1. Upload your image files (PNG, JPG, JPEG, GIF, SVG) to this folder\n")
-            f.write("2. Reference images in questions using direct names: `74f7b4a1b01300dc94f2de0e704e2258`\n")
-            f.write("3. The system will automatically generate proper URLs\n")
-
-        success_message = f'Package "{title}" created successfully!'
-        if azure_folder_name:
-            success_message += f' Azure folder configured: {azure_folder_name}'
-        else:
-            success_message += ' Using local image storage.'
-        
-        flash(success_message, 'success')
-
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Error creating package: {str(e)}', 'error')
-
-    return redirect(url_for('import_questions'))
-
-@app.route('/admin/edit-package/<int:package_id>', methods=['GET', 'POST'])
-@login_required
-def edit_package(package_id):
-    if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.', 'error')
-        return redirect(url_for('dashboard'))
-    
-    package = TestPackage.query.get_or_404(package_id)
-    
-    if request.method == 'POST':
-        title = request.form.get('title', '').strip()
-        description = request.form.get('description', '').strip()
-        price = request.form.get('price', '').strip()
-        azure_folder_name = request.form.get('azure_folder_name', '').strip()
-        
-        if not all([title, description, price]):
-            flash('All required fields must be filled.', 'error')
-            return render_template('admin/edit_package.html', package=package)
-        
-        try:
-            package.title = title
-            package.description = description
-            package.price = float(price)
-            package.azure_folder_name = azure_folder_name if azure_folder_name else None
-            
-            # Validate Azure folder name
-            if azure_folder_name:
-                is_valid, error_message = package.validate_azure_folder_name()
-                if not is_valid:
-                    flash(f'Invalid Azure folder name: {error_message}', 'error')
-                    return render_template('admin/edit_package.html', package=package)
-            
-            db.session.commit()
-            flash('Package updated successfully!', 'success')
-            return redirect(url_for('import_questions'))
-            
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error updating package: {str(e)}', 'error')
-    
-    return render_template('admin/edit_package.html', package=package)
-
-@app.route('/admin/manage-questions/<int:package_id>')
-@login_required
-def manage_questions(package_id):
-    if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.', 'error')
-        return redirect(url_for('dashboard'))
-
-    package = TestPackage.query.get_or_404(package_id)
-    questions = Question.query.filter_by(test_package_id=package_id).all()
-    return render_template('admin/manage_questions.html', package=package, questions=questions)
-
-@app.route('/admin/edit-question/<int:question_id>', methods=['GET', 'POST'])
-@login_required
-def edit_question(question_id):
-    if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.', 'error')
-        return redirect(url_for('dashboard'))
-
-    question = Question.query.get_or_404(question_id)
-
-    if request.method == 'POST':
-        try:
-            # Update question details
-            question_text = request.form.get('question_text', '')
-            domain = request.form.get('domain', '')
-            overall_explanation = request.form.get('overall_explanation', '')
-
-            # Get package title for image processing
-            package_title = question.test_package.title
-
-            if question_text:
-                question.question_text = process_text_with_images(question_text, package_title)
-            if domain:
-                question.domain = domain
-            if overall_explanation:
-                question.overall_explanation = process_text_with_images(overall_explanation, package_title)
-
-            # Update answer options
-            for option in question.answer_options:
-                option_text = request.form.get(f'option_text_{option.id}')
-                option_explanation = request.form.get(f'option_explanation_{option.id}', '')
-                option_correct = request.form.get(f'option_correct_{option.id}') == 'on'
-
-                if option_text:
-                    option.option_text = process_text_with_images(option_text, package_title)
-                    option.explanation = process_text_with_images(option_explanation, package_title) if option_explanation else ''
-                    option.is_correct = option_correct
-
-            db.session.commit()
-            flash('Question updated successfully!', 'success')
-            return redirect(url_for('manage_questions', package_id=question.test_package_id))
-
-        except Exception as e:
-            db.session.rollback()
-            flash(f'Error updating question: {str(e)}', 'error')
-            return render_template('admin/edit_question.html', question=question)
-
-    return render_template('admin/edit_question.html', question=question)
-
-@app.route('/admin/add-question/<int:package_id>', methods=['GET', 'POST'])
-@login_required 
-def add_question(package_id):
-    if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.', 'error')
-        return redirect(url_for('dashboard'))
-
-    package = TestPackage.query.get_or_404(package_id)
-
-    if request.method == 'POST':
-        question = Question(
-            test_package_id=package_id,
-            question_text=process_text_with_images(request.form.get('question_text'), package.title),
-            question_type=request.form.get('question_type', 'multiple-choice'),
-            domain=request.form.get('domain'),
-            overall_explanation=process_text_with_images(request.form.get('overall_explanation'), package.title)
-        )
-        db.session.add(question)
-        db.session.flush()
-
-        # Add answer options
-        option_count = int(request.form.get('option_count', 4))
-        for i in range(1, option_count + 1):
-            option_text = request.form.get(f'option_text_{i}')
-            option_explanation = request.form.get(f'option_explanation_{i}')
-            option_correct = request.form.get(f'option_correct_{i}') == 'on'
-
-            if option_text:
-                option = AnswerOption(
-                    question_id=question.id,
-                    option_text=process_text_with_images(option_text, package.title),
-                    explanation=process_text_with_images(option_explanation, package.title) if option_explanation else '',
-                    is_correct=option_correct,
-                    option_order=i
-                )
-                db.session.add(option)
-
-        db.session.commit()
-        flash('Question added successfully!', 'success')
-        return redirect(url_for('manage_questions', package_id=package_id))
-
-    return render_template('admin/add_question.html', package=package)
-
-@app.route('/test-image-direct')
-def test_image_direct():
-    """Direct test of image processing without requiring admin login"""
-    
-    # Your actual sample text with image hash
-    sample_text = """You are building an Azure AI Search custom skill.
-You have the following custom skill schema definition.
-74f7b4a1b01300dc94f2de0e704e2258
-For the following statement, select Yes if the statement is true. Otherwise, select No.
-CompanyDescription is available for indexing."""
-    
-    from utils import process_text_with_images
-    
-    # Test with Azure integration
-    processed_azure = process_text_with_images(sample_text, "AI-102 Package", "ai-102")
-    
-    # Test without Azure (local fallback)
-    processed_local = process_text_with_images(sample_text, "AI-102 Package", None)
-    
-    return f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Image Processing Test</title>
-        <style>
-            body {{ font-family: Arial, sans-serif; margin: 40px; }}
-            .test-section {{ margin-bottom: 40px; border: 1px solid #ccc; padding: 20px; }}
-            pre {{ background: #f5f5f5; padding: 15px; overflow-x: auto; }}
-            .azure-url {{ color: #0066cc; }}
-            .local-url {{ color: #cc6600; }}
-        </style>
-    </head>
-    <body>
-        <h1>Image Processing Integration Test</h1>
-        
-        <div class="test-section">
-            <h2>Original Text:</h2>
-            <pre>{sample_text}</pre>
-        </div>
-        
-        <div class="test-section">
-            <h2>Processed with Azure (ai-102 folder):</h2>
-            <div>{processed_azure}</div>
-            <h3>Raw HTML:</h3>
-            <pre>{processed_azure}</pre>
-        </div>
-        
-        <div class="test-section">
-            <h2>Processed without Azure (local fallback):</h2>
-            <div>{processed_local}</div>
-            <h3>Raw HTML:</h3>
-            <pre>{processed_local}</pre>
-        </div>
-        
-        <div class="test-section">
-            <h2>Expected Results:</h2>
-            <ul>
-                <li>Azure version should contain: <span class="azure-url">blob.core.windows.net</span></li>
-                <li>Local version should contain: <span class="local-url">/static/images/</span></li>
-                <li>Both should detect the hash: <code>74f7b4a1b01300dc94f2de0e704e2258</code></li>
-                <li>Both should generate proper HTML img tags</li>
-            </ul>
-        </div>
-    </body>
-    </html>
-    """
-
-@app.route('/admin/delete-question/<int:question_id>', methods=['POST'])
-@login_required
-def delete_question(question_id):
-    if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.', 'error')
-        return redirect(url_for('dashboard'))
-
-    question = Question.query.get_or_404(question_id)
-    package_id = question.test_package_id
-
-    db.session.delete(question)
-    db.session.commit()
-
-    flash('Question deleted successfully!', 'success')
-    return redirect(url_for('manage_questions', package_id=package_id))
+    return render_template('admin/dashboard.html',
+                         stats=stats,
+                         recent_packages=recent_packages,
+                         recent_attempts=recent_attempts)
 
 @app.route('/admin/packages')
 @login_required
 def admin_packages():
+    """Manage test packages"""
     if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.', 'error')
+        flash('Access denied.', 'error')
         return redirect(url_for('dashboard'))
-
-    packages = TestPackage.query.all()
+    
+    packages = TestPackage.query.order_by(TestPackage.created_at.desc()).all()
+    
     return render_template('admin/packages.html', packages=packages)
 
-@app.route('/admin/users')
+@app.route('/admin/package/new', methods=['GET', 'POST'])
 @login_required
-def admin_users():
+def admin_package_new():
+    """Create new test package"""
     if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.', 'error')
+        flash('Access denied.', 'error')
         return redirect(url_for('dashboard'))
+    
+    if request.method == 'POST':
+        try:
+            # Create basic package
+            package = TestPackage(
+                title=request.form['title'],
+                description=request.form.get('description', ''),
+                price=float(request.form.get('price', 0)),
+                stripe_price_id=request.form.get('stripe_price_id', ''),
+                created_by=current_user.id
+            )
+            
+            # Add enhanced fields if they exist
+            if hasattr(package, 'difficulty_level'):
+                package.difficulty_level = request.form.get('difficulty_level', 'intermediate')
+            if hasattr(package, 'estimated_duration'):
+                package.estimated_duration = int(request.form.get('estimated_duration', 60))
+            if hasattr(package, 'passing_score'):
+                package.passing_score = int(request.form.get('passing_score', 70))
+            if hasattr(package, 'azure_folder_name'):
+                package.azure_folder_name = request.form.get('azure_folder_name', '')
+            
+            db.session.add(package)
+            db.session.commit()
+            
+            flash(f'Test package "{package.title}" created successfully!', 'success')
+            return redirect(url_for('admin_packages'))
+            
+        except Exception as e:
+            flash(f'Error creating package: {str(e)}', 'error')
+            db.session.rollback()
+    
+    return render_template('admin/package_form.html', package=None)
 
-    users = User.query.order_by(User.created_at.desc()).all()
-    return render_template('admin/users.html', users=users)
-
-@app.route('/admin/toggle-admin/<int:user_id>', methods=['POST'])
+@app.route('/admin/package/<int:package_id>/edit', methods=['GET', 'POST'])
 @login_required
-def toggle_admin(user_id):
+def admin_package_edit(package_id):
+    """Edit test package"""
     if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.', 'error')
+        flash('Access denied.', 'error')
         return redirect(url_for('dashboard'))
-
-    user = User.query.get_or_404(user_id)
-
-    # Prevent removing admin from the environment-specified admin
-    admin_email = os.environ.get('ADMIN_EMAIL')
-    if admin_email and user.email == admin_email and user.is_admin:
-        flash('Cannot remove admin privileges from the environment-specified admin user.', 'error')
-        return redirect(url_for('admin_users'))
-
-    # Prevent user from removing their own admin privileges
-    if user.id == current_user.id:
-        flash('You cannot remove your own admin privileges.', 'error')
-        return redirect(url_for('admin_users'))
-
-    user.is_admin = not user.is_admin
-    db.session.commit()
-
-    action = 'granted' if user.is_admin else 'removed'
-    flash(f'Admin privileges {action} for {user.email}.', 'success')
-    return redirect(url_for('admin_users'))
-
-@app.route('/admin/upload-image/<int:package_id>', methods=['POST'])
-@login_required
-def upload_image(package_id):
-    if not current_user.is_admin:
-        flash('Access denied. Admin privileges required.', 'error')
-        return redirect(url_for('dashboard'))
-
+    
     package = TestPackage.query.get_or_404(package_id)
+    
+    if request.method == 'POST':
+        try:
+            # Update basic fields
+            package.title = request.form['title']
+            package.description = request.form.get('description', '')
+            package.price = float(request.form.get('price', 0))
+            package.stripe_price_id = request.form.get('stripe_price_id', '')
+            package.is_active = 'is_active' in request.form
+            
+            # Update enhanced fields if they exist
+            if hasattr(package, 'difficulty_level'):
+                package.difficulty_level = request.form.get('difficulty_level', 'intermediate')
+            if hasattr(package, 'estimated_duration'):
+                package.estimated_duration = int(request.form.get('estimated_duration', 60))
+            if hasattr(package, 'passing_score'):
+                package.passing_score = int(request.form.get('passing_score', 70))
+            if hasattr(package, 'azure_folder_name'):
+                package.azure_folder_name = request.form.get('azure_folder_name', '')
+            
+            db.session.commit()
+            
+            flash(f'Package "{package.title}" updated successfully!', 'success')
+            return redirect(url_for('admin_packages'))
+            
+        except Exception as e:
+            flash(f'Error updating package: {str(e)}', 'error')
+            db.session.rollback()
+    
+    return render_template('admin/package_form.html', package=package)
 
-    if 'image' not in request.files:
-        flash('No image file selected.', 'error')
-        return redirect(request.referrer)
+@app.route('/admin/package/<int:package_id>/import', methods=['GET', 'POST'])
+@login_required
+def admin_import_questions(package_id):
+    """Import questions from CSV with enhanced processing"""
+    if not current_user.is_admin:
+        flash('Access denied.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    package = TestPackage.query.get_or_404(package_id)
+    
+    if request.method == 'POST':
+        if 'csv_file' not in request.files:
+            flash('No file selected.', 'error')
+            return render_template('admin/import_questions.html', package=package)
+        
+        file = request.files['csv_file']
+        
+        if file.filename == '' or not file.filename.endswith('.csv'):
+            flash('Please select a valid CSV file.', 'error')
+            return render_template('admin/import_questions.html', package=package)
+        
+        try:
+            # Import questions using enhanced utils function
+            result = import_questions_from_csv(file, package_id)
+            
+            if isinstance(result, dict):
+                flash(f'Successfully imported {result["imported"]} questions!', 'success')
+                if result.get("skipped", 0) > 0:
+                    flash(f'{result["skipped"]} rows were skipped.', 'warning')
+            else:
+                flash(f'Successfully imported {result} questions!', 'success')
+            
+            return redirect(url_for('admin_package_questions', package_id=package_id))
+            
+        except Exception as e:
+            flash(f'Import failed: {str(e)}', 'error')
+    
+    return render_template('admin/import_questions.html', package=package)
 
-    file = request.files['image']
-    if file.filename == '':
-        flash('No image file selected.', 'error')
-        return redirect(request.referrer)
+@app.route('/admin/package/<int:package_id>/questions')
+@login_required
+def admin_package_questions(package_id):
+    """View package questions"""
+    if not current_user.is_admin:
+        flash('Access denied.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    package = TestPackage.query.get_or_404(package_id)
+    questions = Question.query.filter_by(test_package_id=package_id).all()
+    
+    return render_template('admin/package_questions.html',
+                         package=package,
+                         questions=questions)
 
-    if file and allowed_file(file.filename):
-        # Check file size (limit to 5MB)
-        file.seek(0, 2)  # Seek to end of file
-        file_size = file.tell()
-        file.seek(0)  # Reset file pointer
+# =============================================================================
+# PURCHASE ROUTES (Keep existing functionality)
+# =============================================================================
 
-        if file_size > 5 * 1024 * 1024:  # 5MB limit
-            flash('File size too large. Maximum size is 5MB.', 'error')
-            return redirect(request.referrer)
+@app.route('/purchase/<int:package_id>')
+@login_required
+def purchase_package(package_id):
+    """Purchase a test package"""
+    package = TestPackage.query.get_or_404(package_id)
+    
+    # Check if user already owns this package
+    existing_purchase = UserPurchase.query.filter_by(
+        user_id=current_user.id,
+        test_package_id=package_id
+    ).first()
+    
+    if existing_purchase:
+        flash('You already own this test package!', 'info')
+        return redirect(url_for('dashboard'))
+    
+    try:
+        # Create Stripe checkout session
+        checkout_session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            line_items=[{
+                'price_data': {
+                    'currency': 'usd',
+                    'product_data': {
+                        'name': package.title,
+                        'description': package.description or 'PrepMyCert Test Package'
+                    },
+                    'unit_amount': int(package.price * 100),  # Amount in cents
+                },
+                'quantity': 1,
+            }],
+            mode='payment',
+            success_url=url_for('purchase_success', package_id=package_id, _external=True) + '?session_id={CHECKOUT_SESSION_ID}',
+            cancel_url=url_for('test_package_detail', package_id=package_id, _external=True),
+            metadata={
+                'package_id': str(package_id),
+                'user_id': str(current_user.id)
+            }
+        )
+        
+        return redirect(checkout_session.url)
+        
+    except Exception as e:
+        flash(f'Payment processing error: {str(e)}', 'error')
+        return redirect(url_for('test_package_detail', package_id=package_id))
 
-        filename = secure_filename(file.filename)
-        safe_package_name = re.sub(r'[^a-zA-Z0-9\-_]', '_', package.title.lower().replace(' ', '_'))
-        package_image_dir = os.path.join('static', 'images', 'questions', safe_package_name)
-        os.makedirs(package_image_dir, exist_ok=True)
+@app.route('/purchase/success/<int:package_id>')
+@login_required
+def purchase_success(package_id):
+    """Handle successful purchase"""
+    session_id = request.args.get('session_id')
+    
+    if not session_id:
+        flash('Invalid payment session.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    try:
+        # Verify payment with Stripe
+        checkout_session = stripe.checkout.Session.retrieve(session_id)
+        
+        if checkout_session.payment_status == 'paid':
+            # Create purchase record
+            purchase = UserPurchase(
+                user_id=current_user.id,
+                test_package_id=package_id,
+                purchase_type='package',
+                amount_paid=checkout_session.amount_total / 100.0,
+                stripe_payment_intent_id=checkout_session.payment_intent
+            )
+            
+            db.session.add(purchase)
+            db.session.commit()
+            
+            package = TestPackage.query.get(package_id)
+            flash(f'Successfully purchased "{package.title}"!', 'success')
+            
+        else:
+            flash('Payment was not completed successfully.', 'error')
+    
+    except Exception as e:
+        flash(f'Error processing purchase: {str(e)}', 'error')
+    
+    return redirect(url_for('dashboard'))
 
-        file_path = os.path.join(package_image_dir, filename)
-        file.save(file_path)
-
-        flash(f'Image {filename} uploaded successfully!', 'success')
-    else:
-        flash('Invalid file type. Please upload PNG, JPG, JPEG, GIF, or SVG files.', 'error')
-
-    return redirect(request.referrer)
-
-def allowed_file(filename):
-    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS and \
-           len(filename) < 255
-
-# These routes are handled in admin_coupon_routes.py
+# =============================================================================
+# ERROR HANDLERS
+# =============================================================================
 
 @app.errorhandler(404)
-def not_found_error(error):
-    return render_template('404.html'), 404
+def not_found(error):
+    return render_template('errors/404.html'), 404
 
 @app.errorhandler(500)
 def internal_error(error):
     db.session.rollback()
-    return render_template('500.html'), 500
+    return render_template('errors/500.html'), 500

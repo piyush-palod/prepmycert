@@ -437,3 +437,110 @@
 ::-webkit-scrollbar-thumb:hover {
     background: var(--primary-dark);
 }
+
+/* Question Image Styling - Preserve aspect ratio */
+.question-image-container {
+    display: block !important;
+    margin: 25px 0 !important;
+    text-align: center !important;
+    clear: both !important;
+    width: 100% !important;
+    padding: 0 !important;
+}
+
+.question-image {
+    max-width: 95% !important;
+    min-height: 300px !important;  /* Ensure minimum height for readability */
+    width: auto !important;  /* Let width adjust naturally */
+    height: auto !important;  /* Preserve aspect ratio */
+    border: 2px solid #e0e0e0 !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+    background: white !important;
+    padding: 10px !important;
+    display: block !important;
+    margin: 0 auto !important;
+    cursor: pointer !important; /* Allow clicking to zoom */
+    object-fit: contain !important;  /* Preserve aspect ratio without cropping */
+}
+
+/* Hover effect for better user interaction */
+.question-image:hover {
+    transform: scale(1.02) !important;
+    transition: transform 0.2s ease !important;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.2) !important;
+}
+
+.question-image.azure-image {
+    border-color: #0066cc !important;
+}
+
+.question-image.local-image {
+    border-color: #cc6600 !important;
+}
+
+/* Click to zoom functionality */
+.question-image.zoomed {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    z-index: 9999 !important;
+    width: 90vw !important;
+    max-width: 1200px !important;
+    max-height: 90vh !important;
+    cursor: zoom-out !important;
+    border: 3px solid #007bff !important;
+}
+
+/* Backdrop for zoomed images */
+.image-backdrop {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: rgba(0,0,0,0.8) !important;
+    z-index: 9998 !important;
+    cursor: zoom-out !important;
+}
+
+/* Responsive behavior for smaller screens */
+@media (max-width: 768px) {
+    .question-image {
+        max-width: 100% !important;
+        min-height: 250px !important;
+    }
+    
+    .question-image-container {
+        margin: 20px 0 !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .question-image {
+        max-width: 100% !important;
+        min-height: 200px !important;
+    }
+    
+    .question-image-container {
+        margin: 15px 0 !important;
+    }
+}
+
+/* Ensure text flows properly around images */
+.question-text, .answer-option-text, p {
+    clear: both !important;
+}
+
+/* Additional spacing for better readability */
+.question-image-container + p,
+.question-image-container + div,
+.question-image-container + br + p {
+    margin-top: 20px !important;
+}
+
+/* Hide unnecessary elements after images */
+.question-image-container + br {
+    display: none !important;
+}

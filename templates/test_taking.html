@@ -36,7 +36,7 @@
                                     <input class="form-check-input" type="radio" name="question_{{ question.id }}" 
                                            id="option_{{ option.id }}" value="{{ option.id }}">
                                     <label class="form-check-label" for="option_{{ option.id }}">
-                                        {{ option.text }}
+                                        {{ option.text|safe }}
                                     </label>
                                 </div>
                                 {% endfor %}
@@ -117,13 +117,27 @@
         </div>
     </div>
 </div>
+
+<!-- Store data in hidden elements to avoid JSON parsing issues -->
+<script id="test-data" type="application/json">
+{
+    "attemptId": {{ test_attempt.id }},
+    "questions": {{ questions|tojson|safe }},
+    "totalQuestions": {{ questions|length }}
+}
+</script>
 {% endblock %}
 
 {% block scripts %}
 <script>
+// Parse test data safely from the script tag
+const testDataElement = document.getElementById('test-data');
+const testConfig = JSON.parse(testDataElement.textContent);
+
 const testData = {
-    attemptId: {{ test_attempt.id }},
-    questions: {{ questions|tojson }},
+    attemptId: testConfig.attemptId,
+    questions: testConfig.questions,
+    totalQuestions: testConfig.totalQuestions,
     currentIndex: 0,
     answers: {}
 };
@@ -141,14 +155,14 @@ document.addEventListener('DOMContentLoaded', function() {
     updateDisplay();
     
     // Navigation buttons
-    prevBtn.addEventListener('click', () => {
+    prevBtn.addEventListener('click', function() {
         if (testData.currentIndex > 0) {
             testData.currentIndex--;
             updateDisplay();
         }
     });
     
-    nextBtn.addEventListener('click', () => {
+    nextBtn.addEventListener('click', function() {
         if (testData.currentIndex < testData.questions.length - 1) {
             testData.currentIndex++;
             updateDisplay();
@@ -156,8 +170,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Question navigation buttons
-    navBtns.forEach(btn => {
-        btn.addEventListener('click', (e) => {
+    navBtns.forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
             const index = parseInt(e.target.getAttribute('data-question-index'));
             testData.currentIndex = index;
             updateDisplay();
@@ -165,23 +179,26 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Answer selection
-    document.addEventListener('change', (e) => {
+    document.addEventListener('change', function(e) {
         if (e.target.type === 'radio') {
             const questionId = e.target.name.replace('question_', '');
             const optionId = e.target.value;
             
             testData.answers[questionId] = optionId;
             
-            // Save answer
+            // Save answer to server
             fetch('/submit-answer', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
+                    test_attempt_id: testData.attemptId,
                     question_id: questionId,
                     selected_option_id: optionId
                 })
+            }).catch(function(error) {
+                console.error('Error saving answer:', error);
             });
             
             updateNavButtons();
@@ -189,28 +206,40 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Submit test
-    submitBtn.addEventListener('click', () => {
+    submitBtn.addEventListener('click', function() {
         const answeredCount = Object.keys(testData.answers).length;
         document.getElementById('answered-count').textContent = answeredCount;
-        new bootstrap.Modal(document.getElementById('submitModal')).show();
+        const modal = new bootstrap.Modal(document.getElementById('submitModal'));
+        modal.show();
     });
     
-    document.getElementById('confirm-submit').addEventListener('click', () => {
+    document.getElementById('confirm-submit').addEventListener('click', function() {
         fetch('/complete-test', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-            }
-        }).then(response => {
+            },
+            body: JSON.stringify({
+                test_attempt_id: testData.attemptId
+            })
+        }).then(function(response) {
             if (response.ok) {
-                window.location.href = response.url;
+                return response.json();
             }
+            throw new Error('Network response was not ok');
+        }).then(function(data) {
+            if (data.redirect_url) {
+                window.location.href = data.redirect_url;
+            }
+        }).catch(function(error) {
+            console.error('Error submitting test:', error);
+            alert('Error submitting test. Please try again.');
         });
     });
     
     function updateDisplay() {
         // Show current question
-        questionSlides.forEach((slide, index) => {
+        questionSlides.forEach(function(slide, index) {
             slide.style.display = index === testData.currentIndex ? 'block' : 'none';
         });
         
@@ -235,7 +264,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function updateNavButtons() {
-        navBtns.forEach((btn, index) => {
+        navBtns.forEach(function(btn, index) {
             const questionId = btn.getAttribute('data-question-id');
             
             btn.classList.remove('btn-outline-secondary', 'btn-success', 'btn-primary');
