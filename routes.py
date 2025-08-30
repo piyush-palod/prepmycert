@@ -4,7 +4,7 @@ import stripe
 from flask import render_template, request, redirect, url_for, flash, session, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
 from app import app, db
-from models import User, TestPackage, Question, AnswerOption, UserPurchase, TestAttempt, UserAnswer, Bundle, Coupon
+from models import User, TestPackage, Course, PracticeTest, Question, AnswerOption, UserPurchase, TestAttempt, UserAnswer, Bundle, Coupon
 from utils import import_questions_from_csv, process_text_with_images
 from datetime import datetime
 
@@ -20,10 +20,13 @@ stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
 
 @app.route('/')
 def index():
+    # Use new Course model instead of TestPackage
+    courses = Course.query.filter_by(is_active=True).all()
+    # For backward compatibility, also get any remaining test packages
     test_packages = TestPackage.query.filter_by(is_active=True).all()
     from models import Bundle
     bundles = Bundle.query.filter_by(is_active=True).limit(3).all()  # Show top 3 bundles
-    return render_template('index.html', test_packages=test_packages, bundles=bundles)
+    return render_template('index.html', courses=courses, test_packages=test_packages, bundles=bundles)
 
 # Legacy routes - redirect to new OTP-based authentication
 @app.route('/register', methods=['GET', 'POST'])
@@ -46,7 +49,14 @@ def logout():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    # Get user's purchased packages (excluding bundle items)
+    # Get user's purchased courses
+    purchased_courses = db.session.query(Course).join(UserPurchase).filter(
+        UserPurchase.user_id == current_user.id,
+        UserPurchase.course_id.isnot(None),
+        UserPurchase.purchase_type == 'course'
+    ).all()
+
+    # Get user's purchased packages (backward compatibility)
     purchased_packages = db.session.query(TestPackage).join(UserPurchase).filter(
         UserPurchase.user_id == current_user.id,
         UserPurchase.test_package_id.isnot(None),
@@ -60,28 +70,40 @@ def dashboard():
         UserPurchase.bundle_id.isnot(None)
     ).all()
 
-    # Get all accessible packages (including from bundles)
-    all_accessible_packages = db.session.query(TestPackage).join(UserPurchase).filter(
-        UserPurchase.user_id == current_user.id,
-        UserPurchase.test_package_id.isnot(None)
-    ).all()
+    # Get all accessible courses and packages
+    all_accessible_courses = purchased_courses
+    all_accessible_packages = purchased_packages
 
-    # Get recent test attempts
+    # Get recent test attempts (from practice tests)
     recent_attempts = TestAttempt.query.filter_by(
         user_id=current_user.id,
         is_completed=True
+    ).filter(
+        TestAttempt.practice_test_id.isnot(None)
     ).order_by(TestAttempt.end_time.desc()).limit(5).all()
 
     return render_template('dashboard.html', 
+                         purchased_courses=purchased_courses,
                          purchased_packages=purchased_packages,
                          purchased_bundles=purchased_bundles,
+                         all_accessible_courses=all_accessible_courses,
                          all_accessible_packages=all_accessible_packages,
                          recent_attempts=recent_attempts)
 
+@app.route('/courses')
+def courses():
+    courses = Course.query.filter_by(is_active=True).all()
+    return render_template('courses.html', courses=courses)
+
 @app.route('/test-packages')
 def test_packages():
-    packages = TestPackage.query.filter_by(is_active=True).all()
-    return render_template('test_packages.html', packages=packages)
+    # Backward compatibility - redirect to courses
+    return redirect(url_for('courses'))
+
+# Legacy route for backward compatibility
+@app.route('/packages')
+def packages():
+    return redirect(url_for('courses'))
 
 @app.route('/bundles')
 def bundles():
@@ -119,9 +141,39 @@ def view_bundle(bundle_id):
                          has_bundle_access=has_bundle_access,
                          individual_access=individual_access)
 
+@app.route('/course/<int:course_id>')
+def course_detail(course_id):
+    course = Course.query.get_or_404(course_id)
+
+    # Check if user has purchased this course
+    has_purchased = False
+    if current_user.is_authenticated:
+        purchase = UserPurchase.query.filter_by(
+            user_id=current_user.id,
+            course_id=course_id
+        ).first()
+        has_purchased = purchase is not None
+
+    # Get practice tests for this course
+    practice_tests = PracticeTest.query.filter_by(
+        course_id=course_id,
+        is_active=True
+    ).order_by(PracticeTest.order).all()
+
+    return render_template('course_detail.html', 
+                         course=course, 
+                         has_purchased=has_purchased,
+                         practice_tests=practice_tests)
+
 @app.route('/package/<int:package_id>')
 def package_detail(package_id):
+    # Legacy route - try to find corresponding course first
     package = TestPackage.query.get_or_404(package_id)
+    
+    # Check if this package has been migrated to a course
+    course = Course.query.filter_by(title=package.title).first()
+    if course:
+        return redirect(url_for('course_detail', course_id=course.id))
 
     # Check if user has purchased this package
     has_purchased = False
@@ -134,14 +186,37 @@ def package_detail(package_id):
 
     return render_template('package_detail.html', package=package, has_purchased=has_purchased)
 
+@app.route('/practice-test/<int:practice_test_id>')
+def practice_test_detail(practice_test_id):
+    practice_test = PracticeTest.query.get_or_404(practice_test_id)
+    course = practice_test.course
+
+    # Check if user has purchased the course
+    has_access = False
+    if current_user.is_authenticated:
+        if current_user.is_admin:
+            has_access = True
+        else:
+            purchase = UserPurchase.query.filter_by(
+                user_id=current_user.id,
+                course_id=course.id
+            ).first()
+            has_access = purchase is not None
+
+    return render_template('practice_test_detail.html', 
+                         practice_test=practice_test,
+                         course=course,
+                         has_access=has_access)
+
 @app.route('/create-checkout-session', methods=['POST'])
 @login_required
 def create_checkout_session():
     package_id = request.form.get('package_id')
+    course_id = request.form.get('course_id')
     bundle_id = request.form.get('bundle_id')
     coupon_code = request.form.get('coupon_code', '').upper().strip()
 
-    # Determine if it's a package or bundle purchase
+    # Determine if it's a course, package, or bundle purchase
     if bundle_id:
         from models import Bundle, BundlePackage
         bundle = Bundle.query.get_or_404(bundle_id)
@@ -162,7 +237,25 @@ def create_checkout_session():
         original_amount = bundle.price
         purchase_type = 'bundle'
 
-    else:
+    elif course_id:
+        course = Course.query.get_or_404(course_id)
+
+        # Check if user already purchased this course
+        existing_purchase = UserPurchase.query.filter_by(
+            user_id=current_user.id,
+            course_id=course_id
+        ).first()
+
+        if existing_purchase:
+            flash('You have already purchased this course.', 'info')
+            return redirect(url_for('course_detail', course_id=course_id))
+
+        item_title = course.title
+        item_description = course.description
+        original_amount = course.price
+        purchase_type = 'course'
+
+    elif package_id:
         package = TestPackage.query.get_or_404(package_id)
 
         # Check if user already purchased this package
@@ -179,6 +272,10 @@ def create_checkout_session():
         item_description = package.description
         original_amount = package.price
         purchase_type = 'package'
+    
+    else:
+        flash('Invalid purchase request.', 'error')
+        return redirect(url_for('index'))
 
     # Apply coupon if provided
     discount_amount = 0
@@ -243,7 +340,11 @@ def create_checkout_session():
             metadata['bundle_id'] = bundle_id
             success_url = f'https://{domain}/payment-success?session_id={{CHECKOUT_SESSION_ID}}&bundle_id={bundle_id}'
             cancel_url = f'https://{domain}/payment-cancel?bundle_id={bundle_id}'
-        else:
+        elif course_id:
+            metadata['course_id'] = course_id
+            success_url = f'https://{domain}/payment-success?session_id={{CHECKOUT_SESSION_ID}}&course_id={course_id}'
+            cancel_url = f'https://{domain}/payment-cancel?course_id={course_id}'
+        elif package_id:
             metadata['package_id'] = package_id
             success_url = f'https://{domain}/payment-success?session_id={{CHECKOUT_SESSION_ID}}&package_id={package_id}'
             cancel_url = f'https://{domain}/payment-cancel?package_id={package_id}'
@@ -431,6 +532,75 @@ def payment_cancel():
     package_id = request.args.get('package_id')
     flash('Payment was cancelled.', 'info')
     return render_template('payment_cancel.html', package_id=package_id)
+
+@app.route('/take-practice-test/<int:practice_test_id>')
+@login_required
+def take_practice_test(practice_test_id):
+    practice_test = PracticeTest.query.get_or_404(practice_test_id)
+    course = practice_test.course
+    
+    # Check if user has purchased this course or is an admin
+    purchase = UserPurchase.query.filter_by(
+        user_id=current_user.id,
+        course_id=course.id
+    ).first()
+
+    if not purchase and not current_user.is_admin:
+        flash('You must purchase this course before taking the practice test.', 'error')
+        return redirect(url_for('course_detail', course_id=course.id))
+
+    questions = Question.query.filter_by(practice_test_id=practice_test_id).all()
+
+    if not questions:
+        flash('This practice test does not have any questions yet.', 'warning')
+        return redirect(url_for('course_detail', course_id=course.id))
+
+    # Convert questions to serializable format using new image processing
+    questions_data = []
+    for question in questions:
+        options_data = []
+        for option in question.answer_options:
+            # Use processed text if available, otherwise original
+            from image_processor import image_processor
+            option_text = image_processor.get_display_text(option.option_text, option.processed_option_text)
+            
+            options_data.append({
+                'id': option.id,
+                'text': option_text,
+                'order': option.option_order
+            })
+
+        # Sort options by order
+        options_data.sort(key=lambda x: x['order'])
+
+        # Use processed text if available, otherwise original
+        question_text = image_processor.get_display_text(question.question_text, question.processed_question_text)
+
+        questions_data.append({
+            'id': question.id,
+            'text': question_text,
+            'type': question.question_type,
+            'domain': question.domain,
+            'options': options_data
+        })
+
+    # Create new test attempt for practice test
+    test_attempt = TestAttempt(
+        user_id=current_user.id,
+        practice_test_id=practice_test_id,
+        total_questions=len(questions)
+    )
+    db.session.add(test_attempt)
+    db.session.commit()
+
+    session['test_attempt_id'] = test_attempt.id
+    session['current_question_index'] = 0
+
+    return render_template('test_taking.html', 
+                         practice_test=practice_test,
+                         course=course,
+                         questions=questions_data,
+                         test_attempt=test_attempt)
 
 @app.route('/take-test/<int:package_id>')
 @login_required

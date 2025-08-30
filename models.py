@@ -118,15 +118,71 @@ class TestPackage(db.Model):
     def question_count(self):
         return len(self.questions)
 
+class Course(db.Model):
+    """New Course model - replaces TestPackage in the new architecture"""
+    __tablename__ = 'courses'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    price = db.Column(db.Float, nullable=False)
+    stripe_price_id = db.Column(db.String(100), nullable=True)
+    domain = db.Column(db.String(100), nullable=False)  # e.g., "Cloud Computing", "Cybersecurity"
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    practice_tests = db.relationship('PracticeTest', backref='course', lazy=True, cascade='all, delete-orphan')
+    purchases = db.relationship('UserPurchase', backref='course', lazy=True)
+    course_azure_mapping = db.relationship('CourseAzureMapping', backref='course', lazy=True)
+    
+    @property
+    def question_count(self):
+        """Total questions across all practice tests in this course"""
+        total = 0
+        for practice_test in self.practice_tests:
+            total += len(practice_test.questions)
+        return total
+    
+    @property
+    def practice_test_count(self):
+        """Number of practice tests in this course"""
+        return len(self.practice_tests)
+
+class PracticeTest(db.Model):
+    """Individual practice test within a course"""
+    __tablename__ = 'practice_tests'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(db.Integer, db.ForeignKey('courses.id'), nullable=False, index=True)
+    title = db.Column(db.String(200), nullable=False)  # e.g., "Practice Test 1", "Practice Test 2"
+    description = db.Column(db.Text, nullable=True)
+    order = db.Column(db.Integer, nullable=False, default=1)  # For ordering practice tests
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    questions = db.relationship('Question', backref='practice_test', lazy=True, cascade='all, delete-orphan')
+    test_attempts = db.relationship('TestAttempt', backref='practice_test', lazy=True)
+    
+    @property
+    def question_count(self):
+        return len(self.questions)
+
 class Question(db.Model):
     __tablename__ = 'questions'
     
     id = db.Column(db.Integer, primary_key=True)
-    test_package_id = db.Column(db.Integer, db.ForeignKey('test_packages.id'), nullable=False, index=True)
+    # Keep old relationship for migration compatibility
+    test_package_id = db.Column(db.Integer, db.ForeignKey('test_packages.id'), nullable=True, index=True)
+    # New relationship to practice test
+    practice_test_id = db.Column(db.Integer, db.ForeignKey('practice_tests.id'), nullable=True, index=True)
     question_text = db.Column(db.Text, nullable=False)
     question_type = db.Column(db.String(50), nullable=False, default='multiple-choice')
     domain = db.Column(db.String(100), nullable=False, index=True)
     overall_explanation = db.Column(db.Text, nullable=True)
+    processed_question_text = db.Column(db.Text, nullable=True)  # Text with Azure URLs
+    processed_explanation = db.Column(db.Text, nullable=True)  # Explanation with Azure URLs
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationships
@@ -140,6 +196,8 @@ class AnswerOption(db.Model):
     question_id = db.Column(db.Integer, db.ForeignKey('questions.id'), nullable=False)
     option_text = db.Column(db.Text, nullable=False)
     explanation = db.Column(db.Text, nullable=True)
+    processed_option_text = db.Column(db.Text, nullable=True)  # Text with Azure URLs
+    processed_explanation = db.Column(db.Text, nullable=True)  # Explanation with Azure URLs
     is_correct = db.Column(db.Boolean, default=False)
     option_order = db.Column(db.Integer, nullable=False)
 
@@ -148,7 +206,10 @@ class UserPurchase(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    test_package_id = db.Column(db.Integer, db.ForeignKey('test_packages.id'), nullable=True)  # nullable for bundles
+    # Keep old relationship for migration compatibility
+    test_package_id = db.Column(db.Integer, db.ForeignKey('test_packages.id'), nullable=True)  # nullable for bundles/courses
+    # New relationship to course
+    course_id = db.Column(db.Integer, db.ForeignKey('courses.id'), nullable=True)  # for new course purchases
     bundle_id = db.Column(db.Integer, db.ForeignKey('bundles.id'), nullable=True)  # for bundle purchases
     stripe_payment_intent_id = db.Column(db.String(100), nullable=True)
     purchase_date = db.Column(db.DateTime, default=datetime.utcnow)
@@ -156,24 +217,35 @@ class UserPurchase(db.Model):
     original_amount = db.Column(db.Float, nullable=False)  # amount before discount
     discount_amount = db.Column(db.Float, default=0)  # discount applied
     coupon_code = db.Column(db.String(50), nullable=True)  # coupon used
-    purchase_type = db.Column(db.String(20), default='package')  # 'package' or 'bundle'
+    purchase_type = db.Column(db.String(20), default='course')  # 'course', 'package', or 'bundle'
     
     @property
     def is_bundle_purchase(self):
         return self.purchase_type == 'bundle' and self.bundle_id is not None
     
     @property
+    def is_course_purchase(self):
+        return self.purchase_type == 'course' and self.course_id is not None
+    
+    @property
     def display_title(self):
         if self.is_bundle_purchase:
             return self.bundle.title
-        return self.test_package.title if self.test_package else "Unknown Package"
+        elif self.is_course_purchase and self.course:
+            return self.course.title
+        elif self.test_package:
+            return self.test_package.title
+        return "Unknown Purchase"
 
 class TestAttempt(db.Model):
     __tablename__ = 'test_attempts'
     
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    test_package_id = db.Column(db.Integer, db.ForeignKey('test_packages.id'), nullable=False)
+    # Keep old relationship for migration compatibility
+    test_package_id = db.Column(db.Integer, db.ForeignKey('test_packages.id'), nullable=True)
+    # New relationship to practice test
+    practice_test_id = db.Column(db.Integer, db.ForeignKey('practice_tests.id'), nullable=True)
     score = db.Column(db.Float, nullable=True)
     total_questions = db.Column(db.Integer, nullable=False)
     correct_answers = db.Column(db.Integer, nullable=False, default=0)
@@ -297,13 +369,38 @@ class BundlePackage(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     bundle_id = db.Column(db.Integer, db.ForeignKey('bundles.id'), nullable=False)
-    test_package_id = db.Column(db.Integer, db.ForeignKey('test_packages.id'), nullable=False)
+    # Keep old relationship for migration compatibility
+    test_package_id = db.Column(db.Integer, db.ForeignKey('test_packages.id'), nullable=True)
+    # New relationship to course
+    course_id = db.Column(db.Integer, db.ForeignKey('courses.id'), nullable=True)
     
     # Relationships
     test_package = db.relationship('TestPackage', lazy=True)
+    course = db.relationship('Course', lazy=True)
+    
+    @property
+    def item_title(self):
+        """Get title from either course or test_package"""
+        if self.course:
+            return self.course.title
+        elif self.test_package:
+            return self.test_package.title
+        return "Unknown Item"
+    
+    @property
+    def item_price(self):
+        """Get price from either course or test_package"""
+        if self.course:
+            return self.course.price
+        elif self.test_package:
+            return self.test_package.price
+        return 0.0
     
     # Ensure unique combinations
-    __table_args__ = (db.UniqueConstraint('bundle_id', 'test_package_id'),)
+    __table_args__ = (
+        db.UniqueConstraint('bundle_id', 'test_package_id'),
+        db.UniqueConstraint('bundle_id', 'course_id'),
+    )
 
 class CouponUsage(db.Model):
     __tablename__ = 'coupon_usages'
@@ -375,3 +472,34 @@ class OTPToken(db.Model):
             db.session.delete(token)
         db.session.commit()
         return len(expired_tokens)
+
+class CourseAzureMapping(db.Model):
+    __tablename__ = 'course_azure_mappings'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    # Keep old relationship for migration compatibility
+    test_package_id = db.Column(db.Integer, db.ForeignKey('test_packages.id'), nullable=True)
+    # New relationship to course
+    course_id = db.Column(db.Integer, db.ForeignKey('courses.id'), nullable=True, unique=True)
+    azure_folder_name = db.Column(db.String(100), nullable=False)  # e.g., "az-900"
+    practice_test_folder = db.Column(db.String(50), nullable=False, default="practice-test-1")
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    
+    # Relationships
+    test_package = db.relationship('TestPackage', backref='azure_mapping', lazy=True)
+    creator = db.relationship('User', backref='created_mappings', lazy=True)
+    
+    @property
+    def title(self):
+        """Get the title from either course or test_package"""
+        if self.course:
+            return self.course.title
+        elif self.test_package:
+            return self.test_package.title
+        return "Unknown"
+    
+    def __repr__(self):
+        return f'<CourseAzureMapping {self.title} -> {self.azure_folder_name}>'

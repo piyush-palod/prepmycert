@@ -1,0 +1,324 @@
+{% extends "base.html" %}
+
+{% block title %}Azure Course Mappings - Admin{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <h2 class="mb-4">
+                <i class="fas fa-cloud"></i> Azure Course Mappings
+                <small class="text-muted">Map test packages to Azure blob folders</small>
+            </h2>
+
+            <!-- Azure Configuration Status -->
+            <div class="alert {% if azure_configured %}alert-success{% else %}alert-warning{% endif %} mb-4">
+                <i class="fas fa-{% if azure_configured %}check-circle{% else %}exclamation-triangle{% endif %}"></i>
+                <strong>Azure Configuration:</strong>
+                {% if azure_configured %}
+                    ✅ Properly configured and ready to use
+                {% else %}
+                    ⚠️ Missing configuration. Please set AZURE_STORAGE_ACCOUNT_NAME and AZURE_CONTAINER_NAME environment variables.
+                {% endif %}
+            </div>
+
+            <!-- Existing Mappings -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list"></i> Existing Course Mappings
+                        <span class="badge badge-secondary">{{ mappings|length }}</span>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if mappings %}
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Course Title</th>
+                                        <th>Azure Folder</th>
+                                        <th>Practice Test Folder</th>
+                                        <th>Status</th>
+                                        <th>Created</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for mapping in mappings %}
+                                    <tr>
+                                        <td>
+                                            <strong>{{ mapping.test_package.title }}</strong>
+                                            <br>
+                                            <small class="text-muted">ID: {{ mapping.test_package.id }}</small>
+                                        </td>
+                                        <td>
+                                            <code>{{ mapping.azure_folder_name }}</code>
+                                        </td>
+                                        <td>
+                                            <code>{{ mapping.practice_test_folder }}</code>
+                                        </td>
+                                        <td>
+                                            {% if mapping.is_active %}
+                                                <span class="badge badge-success">Active</span>
+                                            {% else %}
+                                                <span class="badge badge-secondary">Inactive</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {{ mapping.created_at.strftime('%Y-%m-%d') }}
+                                            <br>
+                                            <small class="text-muted">by {{ mapping.creator.full_name }}</small>
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm" role="group">
+                                                <button class="btn btn-outline-info" onclick="testAzureUrl({{ mapping.id }})" title="Test URL">
+                                                    <i class="fas fa-link"></i>
+                                                </button>
+                                                <button class="btn btn-outline-primary" onclick="editMapping({{ mapping.id }}, '{{ mapping.azure_folder_name }}', '{{ mapping.practice_test_folder }}', {{ mapping.is_active|lower }})" title="Edit">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                <button class="btn btn-outline-danger" onclick="deleteMapping({{ mapping.id }}, '{{ mapping.test_package.title }}')" title="Delete">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-inbox fa-3x mb-3"></i>
+                            <h5>No Course Mappings Yet</h5>
+                            <p>Create your first mapping below to get started with Azure image integration.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Add New Mapping -->
+            {% if unmapped_packages %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-plus"></i> Create New Course Mapping
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('create_course_mapping') }}">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="test_package_id">Test Package</label>
+                                    <select name="test_package_id" id="test_package_id" class="form-control" required>
+                                        <option value="">Select a test package...</option>
+                                        {% for package in unmapped_packages %}
+                                        <option value="{{ package.id }}">{{ package.title }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-group">
+                                    <label for="azure_folder_name">Azure Folder Name</label>
+                                    <input type="text" name="azure_folder_name" id="azure_folder_name" 
+                                           class="form-control" placeholder="e.g., az-900" required>
+                                    <small class="form-text text-muted">Folder name in Azure container</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-group">
+                                    <label for="practice_test_folder">Practice Test Folder</label>
+                                    <input type="text" name="practice_test_folder" id="practice_test_folder" 
+                                           class="form-control" value="practice-test-1">
+                                    <small class="form-text text-muted">Subfolder for this test</small>
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="form-group">
+                                    <label>&nbsp;</label>
+                                    <button type="submit" class="btn btn-primary btn-block">
+                                        <i class="fas fa-plus"></i> Create
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>Example URL Pattern:</strong>
+                            <code>https://yourstorageaccount.blob.core.windows.net/certification-images/az-900/practice-test-1/image.png</code>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    All test packages have been mapped to Azure folders. 
+                    <a href="{{ url_for('bulk_process_images') }}" class="btn btn-sm btn-outline-primary ml-2">
+                        <i class="fas fa-cogs"></i> Process Images
+                    </a>
+                </div>
+            {% endif %}
+
+            <!-- Quick Actions -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-bolt"></i> Quick Actions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <a href="{{ url_for('bulk_process_images') }}" class="btn btn-outline-primary btn-block">
+                                <i class="fas fa-cogs"></i>
+                                Bulk Process Images
+                            </a>
+                            <small class="form-text text-muted">Process existing questions with Azure URLs</small>
+                        </div>
+                        <div class="col-md-4">
+                            <a href="/admin" class="btn btn-outline-secondary btn-block">
+                                <i class="fas fa-arrow-left"></i>
+                                Back to Admin
+                            </a>
+                            <small class="form-text text-muted">Return to admin dashboard</small>
+                        </div>
+                        <div class="col-md-4">
+                            <button class="btn btn-outline-info btn-block" onclick="showHelp()">
+                                <i class="fas fa-question-circle"></i>
+                                Help & Documentation
+                            </button>
+                            <small class="form-text text-muted">View setup instructions</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Course Mapping</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <form id="editForm" method="POST">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="edit_azure_folder_name">Azure Folder Name</label>
+                        <input type="text" name="azure_folder_name" id="edit_azure_folder_name" 
+                               class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit_practice_test_folder">Practice Test Folder</label>
+                        <input type="text" name="practice_test_folder" id="edit_practice_test_folder" 
+                               class="form-control" required>
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" name="is_active" id="edit_is_active" 
+                               class="form-check-input" value="true">
+                        <label class="form-check-label" for="edit_is_active">
+                            Active
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Help Modal -->
+<div class="modal fade" id="helpModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Azure Integration Help</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <h6>Environment Variables Required:</h6>
+                <ul>
+                    <li><code>AZURE_STORAGE_ACCOUNT_NAME</code> - Your Azure storage account name</li>
+                    <li><code>AZURE_CONTAINER_NAME</code> - Container name (default: certification-images)</li>
+                </ul>
+                
+                <h6>Azure Container Structure:</h6>
+                <pre>
+certification-images/
+├── az-900/
+│   ├── practice-test-1/
+│   │   ├── image1.png
+│   │   └── image2.png
+│   └── practice-test-2/
+├── ai-102/
+│   └── practice-test-1/
+└── ...</pre>
+                
+                <h6>How It Works:</h6>
+                <ol>
+                    <li>Create mappings between test packages and Azure folders</li>
+                    <li>When importing questions, <code>IMAGE: filename.png</code> references are automatically converted to Azure URLs</li>
+                    <li>Generated URLs follow the pattern: <code>https://storageaccount.blob.core.windows.net/certification-images/course-folder/practice-test-folder/filename.png</code></li>
+                </ol>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function editMapping(id, folderName, practiceFolder, isActive) {
+    document.getElementById('editForm').action = `/admin/course-mappings/${id}/edit`;
+    document.getElementById('edit_azure_folder_name').value = folderName;
+    document.getElementById('edit_practice_test_folder').value = practiceFolder;
+    document.getElementById('edit_is_active').checked = isActive;
+    $('#editModal').modal('show');
+}
+
+function deleteMapping(id, title) {
+    if (confirm(`Are you sure you want to delete the mapping for "${title}"?`)) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/admin/course-mappings/${id}/delete`;
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+function testAzureUrl(mappingId) {
+    fetch(`/admin/course-mappings/test-url/${mappingId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(`Test URL Generated:\n\n${data.test_url}\n\nPackage: ${data.package_title}\nAzure Folder: ${data.azure_folder}\nPractice Folder: ${data.practice_folder}`);
+            } else {
+                alert(`Error: ${data.error}`);
+            }
+        })
+        .catch(error => {
+            alert(`Request failed: ${error.message}`);
+        });
+}
+
+function showHelp() {
+    $('#helpModal').modal('show');
+}
+</script>
+{% endblock %}

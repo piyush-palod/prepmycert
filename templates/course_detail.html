@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+
+{% block title %}{{ course.title }} - PrepMyCert{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-body">
+                    <div class="course-domain">{{ course.domain }}</div>
+                    <h1 class="card-title">{{ course.title }}</h1>
+                    <p class="card-text lead">{{ course.description }}</p>
+                    
+                    <div class="course-features mt-4">
+                        <h5>What's Included:</h5>
+                        <ul class="list-unstyled">
+                            <li><i class="fas fa-check text-success me-2"></i>{{ course.practice_test_count }} Practice Tests</li>
+                            <li><i class="fas fa-check text-success me-2"></i>{{ course.question_count }} Practice Questions</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Detailed explanations for all answer options</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Unlimited test attempts</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Progress tracking and analytics</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Lifetime access</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Mobile-friendly interface</li>
+                        </ul>
+                    </div>
+
+                    {% if practice_tests %}
+                    <div class="practice-tests mt-4">
+                        <h5>Practice Tests Available:</h5>
+                        <div class="row">
+                            {% for practice_test in practice_tests %}
+                            <div class="col-md-6 mb-3">
+                                <div class="practice-test-card">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h6 class="mb-1">{{ practice_test.title }}</h6>
+                                            {% if practice_test.description %}
+                                                <small class="text-muted">{{ practice_test.description[:100] }}{% if practice_test.description|length > 100 %}...{% endif %}</small>
+                                            {% endif %}
+                                        </div>
+                                        <div class="text-end">
+                                            <div class="badge badge-primary">{{ practice_test.question_count }} Questions</div>
+                                            {% if has_purchased %}
+                                                <div class="mt-1">
+                                                    <a href="{{ url_for('take_practice_test', practice_test_id=practice_test.id) }}" 
+                                                       class="btn btn-sm btn-success">
+                                                        <i class="fas fa-play"></i> Take Test
+                                                    </a>
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="course-benefits mt-4">
+                        <h5>Why Choose This Course:</h5>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="feature-item">
+                                    <i class="fas fa-brain text-primary me-2"></i>
+                                    <strong>Comprehensive Coverage</strong>
+                                    <p class="small text-muted mb-0">All exam topics covered across multiple practice tests</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-item">
+                                    <i class="fas fa-chart-line text-success me-2"></i>
+                                    <strong>Performance Tracking</strong>
+                                    <p class="small text-muted mb-0">Monitor your progress across all practice tests</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-item">
+                                    <i class="fas fa-lightbulb text-warning me-2"></i>
+                                    <strong>Detailed Explanations</strong>
+                                    <p class="small text-muted mb-0">Understand why each answer is correct or incorrect</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-item">
+                                    <i class="fas fa-infinity text-info me-2"></i>
+                                    <strong>Unlimited Practice</strong>
+                                    <p class="small text-muted mb-0">Retake any practice test as many times as needed</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card sticky-top">
+                <div class="card-body text-center">
+                    <div class="course-price-large mb-3">${{ "%.2f"|format(course.price) }}</div>
+                    <p class="text-muted mb-3">One-time payment • Lifetime access</p>
+                    
+                    {% if current_user.is_authenticated %}
+                        {% if has_purchased %}
+                            <div class="alert alert-success">
+                                <i class="fas fa-check-circle me-2"></i>You own this course
+                            </div>
+                            
+                            {% if practice_tests %}
+                                <div class="practice-test-list">
+                                    <h6>Choose a Practice Test:</h6>
+                                    {% for practice_test in practice_tests %}
+                                        <a href="{{ url_for('take_practice_test', practice_test_id=practice_test.id) }}" 
+                                           class="btn btn-success w-100 mb-2">
+                                            <i class="fas fa-play me-2"></i>{{ practice_test.title }}
+                                            <span class="badge badge-light ms-2">{{ practice_test.question_count }}Q</span>
+                                        </a>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="alert alert-warning">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>No practice tests available yet
+                                </div>
+                            {% endif %}
+                            
+                        {% elif current_user.is_admin %}
+                            <div class="alert alert-info">
+                                <i class="fas fa-user-shield me-2"></i>Admin Access
+                            </div>
+                            
+                            {% if practice_tests %}
+                                <div class="practice-test-list">
+                                    <h6>Admin Preview:</h6>
+                                    {% for practice_test in practice_tests %}
+                                        <a href="{{ url_for('take_practice_test', practice_test_id=practice_test.id) }}" 
+                                           class="btn btn-warning w-100 mb-2">
+                                            <i class="fas fa-play me-2"></i>{{ practice_test.title }}
+                                            <span class="badge badge-light ms-2">{{ practice_test.question_count }}Q</span>
+                                        </a>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            
+                        {% else %}
+                            <form method="POST" action="{{ url_for('create_checkout_session') }}">
+                                <input type="hidden" name="course_id" value="{{ course.id }}">
+                                <button type="submit" class="btn btn-primary btn-lg w-100 mb-3">
+                                    <i class="fas fa-shopping-cart me-2"></i>Purchase Now
+                                </button>
+                            </form>
+                        {% endif %}
+                    {% else %}
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>Please log in to purchase
+                        </div>
+                        <a href="{{ url_for('request_otp') }}" class="btn btn-primary btn-lg w-100 mb-3">
+                            <i class="fas fa-sign-in-alt me-2"></i>Login to Purchase
+                        </a>
+                    {% endif %}
+                    
+                    <div class="course-stats text-center">
+                        <div class="row">
+                            <div class="col-4">
+                                <div class="stat-number">{{ course.practice_test_count }}</div>
+                                <div class="stat-label">Tests</div>
+                            </div>
+                            <div class="col-4">
+                                <div class="stat-number">{{ course.question_count }}</div>
+                                <div class="stat-label">Questions</div>
+                            </div>
+                            <div class="col-4">
+                                <div class="stat-number">∞</div>
+                                <div class="stat-label">Attempts</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.course-domain {
+    color: #6c757d;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.5rem;
+}
+
+.course-price-large {
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: #28a745;
+}
+
+.practice-test-card {
+    background-color: #f8f9fa;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    border: 1px solid #e9ecef;
+    transition: all 0.2s;
+}
+
+.practice-test-card:hover {
+    background-color: #e9ecef;
+    border-color: #dee2e6;
+}
+
+.feature-item {
+    padding: 0.75rem 0;
+}
+
+.course-stats {
+    background-color: #f8f9fa;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-top: 1rem;
+}
+
+.stat-number {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #495057;
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+.badge {
+    font-size: 0.75em;
+}
+
+.sticky-top {
+    top: 2rem;
+}
+
+.practice-test-list .btn {
+    text-align: left;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.card {
+    border: none;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    border-radius: 0.5rem;
+}
+
+.alert {
+    border: none;
+    border-radius: 0.5rem;
+}
+
+@media (max-width: 991.98px) {
+    .sticky-top {
+        position: static !important;
+        margin-top: 2rem;
+    }
+}
+</style>
+{% endblock %}

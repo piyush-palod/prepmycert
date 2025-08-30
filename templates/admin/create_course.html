@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+
+{% block title %}Create Course - Admin - PrepMyCert{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h2><i class="fas fa-plus-circle"></i> Create New Course</h2>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <div class="mb-3">
+                            <label for="title" class="form-label">Course Title *</label>
+                            <input type="text" class="form-control" id="title" name="title" required
+                                   placeholder="e.g., AI-102: Azure AI Engineer Associate">
+                            <div class="form-text">The main title of your certification course</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Course Description *</label>
+                            <textarea class="form-control" id="description" name="description" rows="4" required
+                                      placeholder="Comprehensive practice tests for the AI-102 Azure AI Engineer Associate certification exam..."></textarea>
+                            <div class="form-text">Detailed description that will be shown to students</div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="price" class="form-label">Price (USD) *</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        <input type="number" class="form-control" id="price" name="price" 
+                                               step="0.01" min="0.01" required placeholder="29.99">
+                                    </div>
+                                    <div class="form-text">One-time purchase price for the entire course</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="domain" class="form-label">Domain *</label>
+                                    <select class="form-select" id="domain" name="domain" required>
+                                        <option value="">Select a domain...</option>
+                                        <option value="Cloud Computing">Cloud Computing</option>
+                                        <option value="Cybersecurity">Cybersecurity</option>
+                                        <option value="Data Science">Data Science</option>
+                                        <option value="Artificial Intelligence">Artificial Intelligence</option>
+                                        <option value="Machine Learning">Machine Learning</option>
+                                        <option value="Software Engineering">Software Engineering</option>
+                                        <option value="Network Engineering">Network Engineering</option>
+                                        <option value="DevOps">DevOps</option>
+                                        <option value="Database Administration">Database Administration</option>
+                                        <option value="Project Management">Project Management</option>
+                                    </select>
+                                    <div class="form-text">Category/domain for this certification</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>Note:</strong> A default "Practice Test 1" will be automatically created for this course. 
+                            You can add more practice tests and questions after creating the course.
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('admin_courses') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Back to Courses
+                            </a>
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-plus"></i> Create Course
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Course Creation Tips -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-lightbulb"></i> Course Creation Tips</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>📝 Title Best Practices</h6>
+                            <ul class="list-unstyled">
+                                <li><i class="fas fa-check text-success"></i> Include certification code (e.g., AI-102)</li>
+                                <li><i class="fas fa-check text-success"></i> Use official certification names</li>
+                                <li><i class="fas fa-check text-success"></i> Keep it concise but descriptive</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>💰 Pricing Strategy</h6>
+                            <ul class="list-unstyled">
+                                <li><i class="fas fa-check text-success"></i> Research competitor pricing</li>
+                                <li><i class="fas fa-check text-success"></i> Consider value vs. official exams</li>
+                                <li><i class="fas fa-check text-success"></i> Factor in number of questions</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <h6>📚 Content Organization</h6>
+                            <ul class="list-unstyled">
+                                <li><i class="fas fa-check text-success"></i> Plan multiple practice tests</li>
+                                <li><i class="fas fa-check text-success"></i> 20-50 questions per practice test</li>
+                                <li><i class="fas fa-check text-success"></i> Progressive difficulty levels</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>🎯 Student Success</h6>
+                            <ul class="list-unstyled">
+                                <li><i class="fas fa-check text-success"></i> Detailed answer explanations</li>
+                                <li><i class="fas fa-check text-success"></i> Cover all exam objectives</li>
+                                <li><i class="fas fa-check text-success"></i> Include relevant images/diagrams</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Auto-format price input
+document.getElementById('price').addEventListener('input', function(e) {
+    let value = parseFloat(e.target.value);
+    if (!isNaN(value)) {
+        e.target.value = value.toFixed(2);
+    }
+});
+
+// Auto-generate domain based on title (optional)
+document.getElementById('title').addEventListener('blur', function(e) {
+    const title = e.target.value.toLowerCase();
+    const domainSelect = document.getElementById('domain');
+    
+    if (!domainSelect.value) { // Only suggest if no domain selected
+        if (title.includes('azure') || title.includes('aws') || title.includes('cloud')) {
+            domainSelect.value = 'Cloud Computing';
+        } else if (title.includes('security') || title.includes('cyber')) {
+            domainSelect.value = 'Cybersecurity';
+        } else if (title.includes('data') || title.includes('analytics')) {
+            domainSelect.value = 'Data Science';
+        } else if (title.includes('ai') || title.includes('artificial intelligence')) {
+            domainSelect.value = 'Artificial Intelligence';
+        } else if (title.includes('ml') || title.includes('machine learning')) {
+            domainSelect.value = 'Machine Learning';
+        }
+    }
+});
+</script>
+
+<style>
+.form-control:focus, .form-select:focus {
+    border-color: #28a745;
+    box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+}
+
+.alert {
+    border: none;
+    border-radius: 0.5rem;
+}
+
+.card {
+    border: none;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    border-radius: 0.5rem;
+}
+
+.card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    border-radius: 0.5rem 0.5rem 0 0 !important;
+}
+
+.btn {
+    border-radius: 0.375rem;
+    padding: 0.5rem 1rem;
+}
+</style>
+{% endblock %}

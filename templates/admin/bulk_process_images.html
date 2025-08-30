@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+
+{% block title %}Bulk Process Images - Admin{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <h2 class="mb-4">
+                <i class="fas fa-cogs"></i> Bulk Process Images
+                <small class="text-muted">Convert existing IMAGE: references to Azure URLs</small>
+            </h2>
+            
+            <nav aria-label="breadcrumb" class="mb-4">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/admin">Admin</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('manage_course_mappings') }}">Course Mappings</a></li>
+                    <li class="breadcrumb-item active">Bulk Process Images</li>
+                </ol>
+            </nav>
+
+            <div class="alert alert-info mb-4">
+                <i class="fas fa-info-circle"></i>
+                <strong>What this does:</strong> This tool scans all questions and answer options for <code>IMAGE: filename.png</code> references and converts them to Azure Blob Storage URLs using your course mappings. Original text is preserved, and processed versions are stored separately.
+            </div>
+
+            {% if mapping_stats %}
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-chart-bar"></i> Processing Status by Course
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Course</th>
+                                        <th>Azure Mapping</th>
+                                        <th>Unprocessed Questions</th>
+                                        <th>Unprocessed Answer Options</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for stat in mapping_stats %}
+                                    <tr>
+                                        <td>
+                                            <strong>{{ stat.mapping.test_package.title }}</strong>
+                                            <br>
+                                            <small class="text-muted">ID: {{ stat.mapping.test_package.id }}</small>
+                                        </td>
+                                        <td>
+                                            <code>{{ stat.mapping.azure_folder_name }}</code>
+                                            <br>
+                                            <small class="text-muted">{{ stat.mapping.practice_test_folder }}</small>
+                                        </td>
+                                        <td>
+                                            {% if stat.unprocessed_questions > 0 %}
+                                                <span class="badge badge-warning">{{ stat.unprocessed_questions }}</span>
+                                            {% else %}
+                                                <span class="badge badge-success">0</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if stat.unprocessed_options > 0 %}
+                                                <span class="badge badge-warning">{{ stat.unprocessed_options }}</span>
+                                            {% else %}
+                                                <span class="badge badge-success">0</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% set total_unprocessed = stat.unprocessed_questions + stat.unprocessed_options %}
+                                            {% if total_unprocessed == 0 %}
+                                                <span class="badge badge-success">
+                                                    <i class="fas fa-check"></i> Complete
+                                                </span>
+                                            {% elif total_unprocessed < 10 %}
+                                                <span class="badge badge-warning">
+                                                    <i class="fas fa-exclamation"></i> Pending
+                                                </span>
+                                            {% else %}
+                                                <span class="badge badge-danger">
+                                                    <i class="fas fa-times"></i> Needs Processing
+                                                </span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% set total_unprocessed = stat.unprocessed_questions + stat.unprocessed_options %}
+                                            {% if total_unprocessed > 0 %}
+                                                <form method="POST" action="{{ url_for('process_mapping_images', mapping_id=stat.mapping.id) }}" class="d-inline">
+                                                    <button type="submit" class="btn btn-primary btn-sm" 
+                                                            onclick="return confirm('Process {{ total_unprocessed }} unprocessed items for {{ stat.mapping.test_package.title }}?')">
+                                                        <i class="fas fa-play"></i>
+                                                        Process {{ total_unprocessed }} Items
+                                                    </button>
+                                                </form>
+                                            {% else %}
+                                                <button class="btn btn-success btn-sm" disabled>
+                                                    <i class="fas fa-check"></i> All Processed
+                                                </button>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary Card -->
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <div class="card text-white bg-primary">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h6 class="card-title">Total Courses</h6>
+                                        <h3 class="mb-0">{{ mapping_stats|length }}</h3>
+                                    </div>
+                                    <div class="align-self-center">
+                                        <i class="fas fa-graduation-cap fa-2x"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card text-white bg-warning">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h6 class="card-title">Unprocessed Questions</h6>
+                                        <h3 class="mb-0">{{ mapping_stats|sum(attribute='unprocessed_questions') }}</h3>
+                                    </div>
+                                    <div class="align-self-center">
+                                        <i class="fas fa-question-circle fa-2x"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card text-white bg-info">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h6 class="card-title">Unprocessed Options</h6>
+                                        <h3 class="mb-0">{{ mapping_stats|sum(attribute='unprocessed_options') }}</h3>
+                                    </div>
+                                    <div class="align-self-center">
+                                        <i class="fas fa-list fa-2x"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Batch Actions -->
+                {% set total_unprocessed_all = mapping_stats|sum(attribute='unprocessed_questions') + mapping_stats|sum(attribute='unprocessed_options') %}
+                {% if total_unprocessed_all > 0 %}
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-bolt"></i> Batch Actions
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <strong>Warning:</strong> Processing all courses at once may take several minutes depending on the number of images. Consider processing one course at a time for better control.
+                        </div>
+                        
+                        <button class="btn btn-warning btn-lg" onclick="processAllCourses()">
+                            <i class="fas fa-cogs"></i>
+                            Process All Courses ({{ total_unprocessed_all }} items)
+                        </button>
+                        
+                        <p class="mt-2 text-muted">
+                            This will process all unprocessed images across all courses. Each course will be processed sequentially.
+                        </p>
+                    </div>
+                </div>
+                {% endif %}
+
+            {% else %}
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <i class="fas fa-inbox fa-4x text-muted mb-4"></i>
+                        <h4>No Course Mappings Found</h4>
+                        <p class="text-muted">You need to create course mappings before you can process images.</p>
+                        <a href="{{ url_for('manage_course_mappings') }}" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Create Course Mappings
+                        </a>
+                    </div>
+                </div>
+            {% endif %}
+
+            <!-- Help Section -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-question-circle"></i> How Image Processing Works
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-1"></i> Before Processing</h6>
+                            <div class="bg-light p-3 rounded">
+                                <code>IMAGE: diagram-azure-services.png</code>
+                                <br>
+                                <small class="text-muted">Original text with IMAGE: reference</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-2"></i> After Processing</h6>
+                            <div class="bg-light p-3 rounded">
+                                <code>&lt;img src="https://storage.blob.core.windows.net/certification-images/az-900/practice-test-1/diagram-azure-services.png" ... /&gt;</code>
+                                <br>
+                                <small class="text-muted">Processed HTML with Azure URL</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <h6><i class="fas fa-info-circle"></i> Important Notes</h6>
+                        <ul>
+                            <li>Original text is preserved in the database</li>
+                            <li>Processed text with Azure URLs is stored separately</li>
+                            <li>Templates will automatically use processed text when available</li>
+                            <li>You can reprocess at any time if URLs change</li>
+                            <li>Missing Azure mappings will prevent processing</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function processAllCourses() {
+    if (!confirm('This will process ALL unprocessed images across all courses. This may take several minutes. Continue?')) {
+        return;
+    }
+    
+    const forms = document.querySelectorAll('form[action*="process"]');
+    let processed = 0;
+    
+    function processNext() {
+        if (processed >= forms.length) {
+            alert('All courses have been processed!');
+            location.reload();
+            return;
+        }
+        
+        const form = forms[processed];
+        const courseName = form.closest('tr').querySelector('strong').textContent;
+        
+        if (confirm(`Processing course: ${courseName}. Continue?`)) {
+            form.submit();
+        }
+        
+        processed++;
+        setTimeout(processNext, 1000); // Wait 1 second between submissions
+    }
+    
+    processNext();
+}
+</script>
+{% endblock %}

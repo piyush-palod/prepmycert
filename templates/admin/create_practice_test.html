@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+
+{% block title %}Create Practice Test - {{ course.title }} - Admin - PrepMyCert{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('admin_courses') }}">Courses</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('manage_practice_tests', course_id=course.id) }}">{{ course.title }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Create Practice Test</li>
+        </ol>
+    </nav>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h2><i class="fas fa-plus-circle"></i> Create New Practice Test</h2>
+                    <p class="mb-0 text-muted">for <strong>{{ course.title }}</strong></p>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <div class="mb-3">
+                            <label for="title" class="form-label">Practice Test Title *</label>
+                            <input type="text" class="form-control" id="title" name="title" required
+                                   placeholder="Practice Test {{ next_order }}"
+                                   value="Practice Test {{ next_order }}">
+                            <div class="form-text">Name for this specific practice test (e.g., "Practice Test 1", "Mock Exam A")</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea class="form-control" id="description" name="description" rows="3"
+                                      placeholder="Practice test covering all exam objectives with {{ course.domain }} focus..."></textarea>
+                            <div class="form-text">Optional description explaining what this practice test covers</div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="order" class="form-label">Order/Sequence *</label>
+                                    <input type="number" class="form-control" id="order" name="order" 
+                                           min="1" required value="{{ next_order }}">
+                                    <div class="form-text">Display order (Practice Test 1, 2, 3, etc.)</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Status</label>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="is_active" name="is_active" checked>
+                                        <label class="form-check-label" for="is_active">
+                                            Active (visible to students)
+                                        </label>
+                                    </div>
+                                    <div class="form-text">Uncheck to hide this practice test from students</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>Next Steps:</strong> After creating this practice test, you can:
+                            <ul class="mb-0 mt-2">
+                                <li>Add individual questions manually</li>
+                                <li>Import questions from CSV files</li>
+                                <li>Organize questions by difficulty or topic</li>
+                            </ul>
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('manage_practice_tests', course_id=course.id) }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Back to Practice Tests
+                            </a>
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-plus"></i> Create Practice Test
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Practice Test Planning Guide -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-lightbulb"></i> Practice Test Planning Guide</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>📊 Best Practices</h6>
+                            <ul class="list-unstyled">
+                                <li><i class="fas fa-check text-success"></i> <strong>20-50 questions</strong> per practice test</li>
+                                <li><i class="fas fa-check text-success"></i> <strong>Progressive difficulty</strong> across tests</li>
+                                <li><i class="fas fa-check text-success"></i> <strong>Cover all exam domains</strong> in each test</li>
+                                <li><i class="fas fa-check text-success"></i> <strong>Mix question types</strong> if applicable</li>
+                            </ul>
+
+                            <h6 class="mt-4">🎯 Naming Conventions</h6>
+                            <ul class="list-unstyled">
+                                <li><i class="fas fa-lightbulb text-warning"></i> Practice Test 1, 2, 3...</li>
+                                <li><i class="fas fa-lightbulb text-warning"></i> Foundation Test, Advanced Test</li>
+                                <li><i class="fas fa-lightbulb text-warning"></i> Mock Exam A, B, C</li>
+                                <li><i class="fas fa-lightbulb text-warning"></i> Domain-specific Tests</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>📚 Content Strategy</h6>
+                            <ul class="list-unstyled">
+                                <li><i class="fas fa-star text-warning"></i> <strong>Test 1:</strong> Foundation concepts</li>
+                                <li><i class="fas fa-star text-warning"></i> <strong>Test 2:</strong> Intermediate scenarios</li>
+                                <li><i class="fas fa-star text-warning"></i> <strong>Test 3:</strong> Advanced applications</li>
+                                <li><i class="fas fa-star text-warning"></i> <strong>Final Test:</strong> Exam simulation</li>
+                            </ul>
+
+                            <h6 class="mt-4">⏱️ Time Recommendations</h6>
+                            <ul class="list-unstyled">
+                                <li><i class="fas fa-clock text-info"></i> <strong>30-60 minutes</strong> per practice test</li>
+                                <li><i class="fas fa-clock text-info"></i> <strong>1.5-2 minutes</strong> per question</li>
+                                <li><i class="fas fa-clock text-info"></i> <strong>Match real exam</strong> time constraints</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-success mt-3">
+                        <i class="fas fa-graduation-cap"></i>
+                        <strong>Pro Tip:</strong> Students perform better with multiple shorter practice tests rather than one long test. 
+                        Aim for 3-5 practice tests per course with 20-40 questions each.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Auto-update title based on order
+document.getElementById('order').addEventListener('input', function(e) {
+    const order = e.target.value;
+    const titleField = document.getElementById('title');
+    
+    // Only update if it's still the default pattern
+    if (titleField.value.match(/^Practice Test \d+$/)) {
+        titleField.value = `Practice Test ${order}`;
+    }
+});
+
+// Generate description suggestion based on course info
+document.getElementById('description').addEventListener('focus', function(e) {
+    if (!e.target.value) {
+        const courseTitle = "{{ course.title }}";
+        const courseDomain = "{{ course.domain }}";
+        const order = document.getElementById('order').value;
+        
+        let suggestion = `Practice test ${order} for ${courseTitle}`;
+        if (order == "1") {
+            suggestion += " covering foundational concepts";
+        } else if (order == "2") {
+            suggestion += " with intermediate-level scenarios";
+        } else if (order >= "3") {
+            suggestion += " featuring advanced applications";
+        }
+        suggestion += ` in ${courseDomain}.`;
+        
+        e.target.placeholder = suggestion;
+    }
+});
+</script>
+
+<style>
+.form-control:focus, .form-select:focus {
+    border-color: #28a745;
+    box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+}
+
+.alert {
+    border: none;
+    border-radius: 0.5rem;
+}
+
+.card {
+    border: none;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    border-radius: 0.5rem;
+}
+
+.card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    border-radius: 0.5rem 0.5rem 0 0 !important;
+}
+
+.breadcrumb {
+    background-color: transparent;
+    padding: 0;
+}
+
+.breadcrumb-item + .breadcrumb-item::before {
+    content: "›";
+    color: #6c757d;
+}
+
+.form-check-input:checked {
+    background-color: #28a745;
+    border-color: #28a745;
+}
+</style>
+{% endblock %}

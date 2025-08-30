@@ -29,6 +29,7 @@
                 </div>
                 <div class="card-body">
                     <form method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <div class="mb-3">
                             <label for="test_package_id" class="form-label">Select Test Package</label>
                             <select class="form-select" id="test_package_id" name="test_package_id" required>
@@ -45,7 +46,7 @@
                             <input type="file" class="form-control" id="file" name="file" accept=".csv" required>
                             <div class="invalid-feedback">Please select a CSV file.</div>
                         </div>
-
+                        
                         <div class="d-grid">
                             <button type="submit" class="btn btn-primary">
                                 <i class="fas fa-upload me-2"></i>Import Questions
@@ -89,6 +90,7 @@
                 </div>
                 <div class="card-body">
                     <form method="POST" action="{{ url_for('create_package') }}" class="needs-validation" novalidate>
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <div class="mb-3">
                             <label for="title" class="form-label">Package Title</label>
                             <input type="text" class="form-control" id="title" name="title" required>
@@ -160,13 +162,13 @@
                 <div class="card-body">
                     <p class="small">To include images in your questions:</p>
                     <ol class="small">
-                        <li>Upload images to <code>/static/images/questions/[package_name]/</code></li>
+                        <li>Upload images to Azure Blob Storage in the correct folder structure</li>
                         <li>Use <code>IMAGE: filename.png</code> in your CSV or question text</li>
-                        <li>Each package gets its own image folder automatically</li>
+                        <li>Images will be automatically converted to Azure URLs during import</li>
                     </ol>
                     <div class="alert alert-warning alert-sm">
                         <i class="fas fa-exclamation-triangle me-1"></i>
-                        <small>Package names are converted to safe folder names (spaces become underscores, special characters removed)</small>
+                        <small>Make sure to configure Azure course mappings in the admin panel first</small>
                     </div>
                 </div>
             </div>

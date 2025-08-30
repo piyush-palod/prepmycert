@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Courses - Admin - PrepMyCert{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>📚 Manage Courses</h1>
+        <a href="{{ url_for('create_course') }}" class="btn btn-success">
+            <i class="fas fa-plus"></i> Create New Course
+        </a>
+    </div>
+
+    {% if course_stats %}
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Course Title</th>
+                                        <th>Domain</th>
+                                        <th>Price</th>
+                                        <th>Practice Tests</th>
+                                        <th>Total Questions</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for stat in course_stats %}
+                                    <tr>
+                                        <td>
+                                            <strong>{{ stat.course.title }}</strong>
+                                            <br>
+                                            <small class="text-muted">{{ stat.course.description[:100] }}{% if stat.course.description|length > 100 %}...{% endif %}</small>
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-secondary">{{ stat.course.domain }}</span>
+                                        </td>
+                                        <td>
+                                            <strong>${{ "%.2f"|format(stat.course.price) }}</strong>
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-info">{{ stat.practice_test_count }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-primary">{{ stat.total_questions }}</span>
+                                        </td>
+                                        <td>
+                                            {% if stat.course.is_active %}
+                                                <span class="badge badge-success">Active</span>
+                                            {% else %}
+                                                <span class="badge badge-secondary">Inactive</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <div class="btn-group" role="group">
+                                                <a href="{{ url_for('manage_practice_tests', course_id=stat.course.id) }}" 
+                                                   class="btn btn-sm btn-primary" title="Manage Practice Tests">
+                                                    <i class="fas fa-list"></i>
+                                                </a>
+                                                <a href="{{ url_for('edit_course', course_id=stat.course.id) }}" 
+                                                   class="btn btn-sm btn-warning" title="Edit Course">
+                                                    <i class="fas fa-edit"></i>
+                                                </a>
+                                                <a href="{{ url_for('course_detail', course_id=stat.course.id) }}" 
+                                                   class="btn btn-sm btn-info" title="View Course">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                                <button class="btn btn-sm btn-danger" 
+                                                        onclick="deleteCourse({{ stat.course.id }}, '{{ stat.course.title }}')" 
+                                                        title="Delete Course">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-graduation-cap fa-4x text-muted mb-3"></i>
+            <h3>No Courses Created Yet</h3>
+            <p class="text-muted">Create your first course to get started with practice tests.</p>
+            <a href="{{ url_for('create_course') }}" class="btn btn-success btn-lg">
+                <i class="fas fa-plus"></i> Create Your First Course
+            </a>
+        </div>
+    {% endif %}
+
+    <!-- Course Statistics Cards -->
+    {% if course_stats %}
+    <div class="row mt-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="me-3">
+                            <i class="fas fa-graduation-cap fa-2x"></i>
+                        </div>
+                        <div>
+                            <div class="fs-4 fw-bold">{{ course_stats|length }}</div>
+                            <div>Total Courses</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="me-3">
+                            <i class="fas fa-tasks fa-2x"></i>
+                        </div>
+                        <div>
+                            <div class="fs-4 fw-bold">
+                                {% set total_practice_tests = course_stats|sum(attribute='practice_test_count') %}
+                                {{ total_practice_tests }}
+                            </div>
+                            <div>Practice Tests</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="me-3">
+                            <i class="fas fa-question-circle fa-2x"></i>
+                        </div>
+                        <div>
+                            <div class="fs-4 fw-bold">
+                                {% set total_questions = course_stats|sum(attribute='total_questions') %}
+                                {{ total_questions }}
+                            </div>
+                            <div>Total Questions</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="me-3">
+                            <i class="fas fa-check-circle fa-2x"></i>
+                        </div>
+                        <div>
+                            <div class="fs-4 fw-bold">
+                                {% set active_courses = course_stats|selectattr('course.is_active')|list|length %}
+                                {{ active_courses }}
+                            </div>
+                            <div>Active Courses</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Delete Course Modal -->
+<div class="modal fade" id="deleteCourseModal" tabindex="-1" aria-labelledby="deleteCourseModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteCourseModalLabel">Delete Course</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the course <strong id="courseTitle"></strong>?</p>
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Warning:</strong> This will permanently delete the course and all its practice tests and questions. This action cannot be undone.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteCourseForm" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash"></i> Delete Course
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function deleteCourse(courseId, courseTitle) {
+    document.getElementById('courseTitle').textContent = courseTitle;
+    document.getElementById('deleteCourseForm').action = '/admin/courses/' + courseId + '/delete';
+    new bootstrap.Modal(document.getElementById('deleteCourseModal')).show();
+}
+</script>
+
+<style>
+.card {
+    border: none;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    margin-bottom: 1rem;
+}
+
+.card-body {
+    padding: 1.5rem;
+}
+
+.table th {
+    border-top: none;
+    font-weight: 600;
+    color: #495057;
+    background-color: #f8f9fa;
+}
+
+.badge {
+    font-size: 0.75em;
+}
+
+.btn-group .btn {
+    margin-right: 0.25rem;
+}
+
+.btn-group .btn:last-child {
+    margin-right: 0;
+}
+</style>
+{% endblock %}

@@ -7,41 +7,28 @@ from werkzeug.security import generate_password_hash
 
 def process_text_with_images(text, package_name=None):
     """
-    Process text and replace IMAGE: references with actual img tags
-    Example: "IMAGE: word-image-43535-354.png" or "[IMAGE: word-image-43535-354.png]" becomes an img tag
-    Images are organized by package name in separate folders
+    Legacy function for backward compatibility.
+    Now returns processed text from database if available, otherwise falls back to Azure processing.
+    
+    For new implementations, use image_processor.get_display_text() directly.
     """
     if not text or pd.isna(text):
         return ""
     
-    text = str(text)
-    
-    # Pattern to match IMAGE: references with or without square brackets
-    image_pattern = r'\[?IMAGE:\s*([^\s\[\]]+\.(png|jpg|jpeg|gif|svg))\]?'
-    
-    def replace_image(match):
-        image_filename = match.group(1)
-        # Use package-specific folder if package_name is provided, otherwise fall back to general folder
-        if package_name:
-            # Create a safe folder name from package title
-            safe_package_name = re.sub(r'[^a-zA-Z0-9\-_]', '_', package_name.lower().replace(' ', '_'))
-            image_path = f"/static/images/questions/{safe_package_name}/{image_filename}"
-        else:
-            image_path = f"/static/images/questions/{image_filename}"
-        return f'<img src="{image_path}" alt="{image_filename}" class="question-image" style="max-width: 100%; height: auto; margin: 10px 0;">'
-    
-    # Replace all IMAGE: references with img tags
-    processed_text = re.sub(image_pattern, replace_image, text, flags=re.IGNORECASE)
-    
-    return processed_text
+    # For legacy compatibility, just return the text as-is
+    # New Azure processing is handled in image_processor.py
+    return str(text)
 
 def import_questions_from_csv(file, test_package_id):
     """
-    Import questions from CSV file format matching the uploaded sample.
+    Import questions from CSV file format and process images for Azure.
     Expected columns: Question, Question Type, Answer Option 1-6, Explanation 1-6, 
     Correct Answers, Overall Explanation, Domain
     """
     try:
+        # Import image processor
+        from image_processor import image_processor
+        
         # Read CSV file
         df = pd.read_csv(file)
         
@@ -65,18 +52,29 @@ def import_questions_from_csv(file, test_package_id):
                 skipped_count += 1
                 continue
             
-            # Get package for folder naming
-            from models import TestPackage
-            package = TestPackage.query.get(test_package_id)
-            package_name = package.title if package else None
+            # Process images for Azure URLs
+            processed_question_text = None
+            processed_explanation = None
             
-            # Create question with image processing
+            if image_processor.has_image_references(question_text):
+                processed_question_text = image_processor.process_text_for_azure(
+                    question_text, test_package_id
+                )
+            
+            if overall_explanation and image_processor.has_image_references(overall_explanation):
+                processed_explanation = image_processor.process_text_for_azure(
+                    overall_explanation, test_package_id
+                )
+            
+            # Create question with both original and processed text
             question = Question(
                 test_package_id=test_package_id,
-                question_text=process_text_with_images(question_text, package_name),
+                question_text=question_text,
                 question_type=question_type,
                 domain=domain,
-                overall_explanation=process_text_with_images(overall_explanation, package_name)
+                overall_explanation=overall_explanation,
+                processed_question_text=processed_question_text,
+                processed_explanation=processed_explanation
             )
             db.session.add(question)
             db.session.flush()  # To get the question ID
@@ -95,11 +93,29 @@ def import_questions_from_csv(file, test_package_id):
                 
                 if option_text and str(option_text).strip() and str(option_text).strip().lower() != 'nan':
                     is_correct = i in correct_answer_nums
+                    option_text_clean = str(option_text).strip()
+                    explanation_clean = str(explanation).strip() if explanation and str(explanation).strip().lower() != 'nan' else ''
+                    
+                    # Process images for Azure URLs
+                    processed_option_text = None
+                    processed_option_explanation = None
+                    
+                    if image_processor.has_image_references(option_text_clean):
+                        processed_option_text = image_processor.process_text_for_azure(
+                            option_text_clean, test_package_id
+                        )
+                    
+                    if explanation_clean and image_processor.has_image_references(explanation_clean):
+                        processed_option_explanation = image_processor.process_text_for_azure(
+                            explanation_clean, test_package_id
+                        )
                     
                     answer_option = AnswerOption(
                         question_id=question.id,
-                        option_text=process_text_with_images(str(option_text).strip(), package_name),
-                        explanation=process_text_with_images(str(explanation).strip(), package_name) if explanation and str(explanation).strip().lower() != 'nan' else '',
+                        option_text=option_text_clean,
+                        explanation=explanation_clean,
+                        processed_option_text=processed_option_text,
+                        processed_explanation=processed_option_explanation,
                         is_correct=is_correct,
                         option_order=i
                     )
