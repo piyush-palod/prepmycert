@@ -34,7 +34,7 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('test_packages') }}">Test Packages</a>
+                        <a class="nav-link" href="{{ url_for('courses') }}">Courses</a>
                     </li>
                     {% if current_user.is_authenticated %}
                         <li class="nav-item">
@@ -47,7 +47,6 @@
                             </a>
                             <ul class="dropdown-menu" aria-labelledby="adminDropdown">
                                 <li><a class="dropdown-item" href="{{ url_for('admin_courses') }}"><i class="fas fa-graduation-cap me-2"></i>Manage Courses</a></li>
-                                <li><a class="dropdown-item" href="{{ url_for('admin_packages') }}"><i class="fas fa-box me-2"></i>Legacy Packages</a></li>
                                 <li><a class="dropdown-item" href="{{ url_for('admin_users') }}"><i class="fas fa-users me-2"></i>Manage Users</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="{{ url_for('admin_coupon_list') }}"><i class="fas fa-ticket-alt me-2"></i>Manage Coupons</a></li>
