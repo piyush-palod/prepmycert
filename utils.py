@@ -2,42 +2,15 @@ import pandas as pd
 import re
 import os
 from app import db
-from models import Question, AnswerOption, User
-from werkzeug.security import generate_password_hash
+from models import Course, PracticeTest, Question, AnswerOption
+from azure_service import azure_service
+import logging
 
-def process_text_with_images(text, package_name=None):
-    """
-    Process text and replace IMAGE: references with actual img tags
-    Example: "IMAGE: word-image-43535-354.png" or "[IMAGE: word-image-43535-354.png]" becomes an img tag
-    Images are organized by package name in separate folders
-    """
-    if not text or pd.isna(text):
-        return ""
-    
-    text = str(text)
-    
-    # Pattern to match IMAGE: references with or without square brackets
-    image_pattern = r'\[?IMAGE:\s*([^\s\[\]]+\.(png|jpg|jpeg|gif|svg))\]?'
-    
-    def replace_image(match):
-        image_filename = match.group(1)
-        # Use package-specific folder if package_name is provided, otherwise fall back to general folder
-        if package_name:
-            # Create a safe folder name from package title
-            safe_package_name = re.sub(r'[^a-zA-Z0-9\-_]', '_', package_name.lower().replace(' ', '_'))
-            image_path = f"/static/images/questions/{safe_package_name}/{image_filename}"
-        else:
-            image_path = f"/static/images/questions/{image_filename}"
-        return f'<img src="{image_path}" alt="{image_filename}" class="question-image" style="max-width: 100%; height: auto; margin: 10px 0;">'
-    
-    # Replace all IMAGE: references with img tags
-    processed_text = re.sub(image_pattern, replace_image, text, flags=re.IGNORECASE)
-    
-    return processed_text
+logger = logging.getLogger(__name__)
 
-def import_questions_from_csv(file, test_package_id):
+def import_questions_from_csv(file, practice_test_id):
     """
-    Import questions from CSV file format matching the uploaded sample.
+    Import questions from CSV file format for the new Course → Practice Test → Question structure.
     Expected columns: Question, Question Type, Answer Option 1-6, Explanation 1-6, 
     Correct Answers, Overall Explanation, Domain
     """
@@ -45,99 +18,185 @@ def import_questions_from_csv(file, test_package_id):
         # Read CSV file
         df = pd.read_csv(file)
         
+        # Get practice test and course info for Azure folder
+        practice_test = PracticeTest.query.get(practice_test_id)
+        if not practice_test:
+            raise ValueError(f"Practice test with ID {practice_test_id} not found")
+        
+        course = practice_test.course
+        azure_folder = course.azure_folder
+        
         imported_count = 0
         skipped_count = 0
+        error_count = 0
         
-        for _, row in df.iterrows():
-            question_text = row['Question']
-            question_type = row.get('Question Type', 'multiple-choice')
-            domain = row.get('Domain', 'General')
-            overall_explanation = row.get('Overall Explanation', '')
-            correct_answers = row.get('Correct Answers', '')
-            
-            # Skip if question already exists
-            existing_question = Question.query.filter_by(
-                test_package_id=test_package_id,
-                question_text=question_text
-            ).first()
-            
-            if existing_question:
-                skipped_count += 1
-                continue
-            
-            # Get package for folder naming
-            from models import TestPackage
-            package = TestPackage.query.get(test_package_id)
-            package_name = package.title if package else None
-            
-            # Create question with image processing
-            question = Question(
-                test_package_id=test_package_id,
-                question_text=process_text_with_images(question_text, package_name),
-                question_type=question_type,
-                domain=domain,
-                overall_explanation=process_text_with_images(overall_explanation, package_name)
-            )
-            db.session.add(question)
-            db.session.flush()  # To get the question ID
-            
-            # Parse correct answers (can be multiple numbers like "1,3,5")
-            correct_answer_nums = []
-            if correct_answers:
-                # Handle different formats: "1", "1,3", "1 3", etc.
-                correct_answer_nums = re.findall(r'\d+', str(correct_answers))
-                correct_answer_nums = [int(num) for num in correct_answer_nums]
-            
-            # Add answer options
-            for i in range(1, 7):  # Up to 6 options
-                option_text = row.get(f'Answer Option {i}', '')
-                explanation = row.get(f'Explanation {i}', '')
+        for index, row in df.iterrows():
+            try:
+                question_text = row['Question']
+                question_type = row.get('Question Type', 'multiple-choice')
+                domain = row.get('Domain', 'General')
+                overall_explanation = row.get('Overall Explanation', '')
+                correct_answers = row.get('Correct Answers', '')
                 
-                if option_text and str(option_text).strip() and str(option_text).strip().lower() != 'nan':
-                    is_correct = i in correct_answer_nums
+                # Skip if question already exists in this practice test
+                existing_question = Question.query.filter_by(
+                    practice_test_id=practice_test_id,
+                    question_text=question_text
+                ).first()
+                
+                if existing_question:
+                    skipped_count += 1
+                    continue
+                
+                # Process question text and explanation with Azure images
+                processed_question_text = azure_service.process_text_with_images(
+                    question_text, azure_folder
+                )
+                processed_explanation = azure_service.process_text_with_images(
+                    overall_explanation, azure_folder
+                ) if overall_explanation else ''
+                
+                # Create question
+                question = Question(
+                    practice_test_id=practice_test_id,
+                    question_text=processed_question_text,
+                    question_type=question_type,
+                    domain=domain,
+                    overall_explanation=processed_explanation,
+                    order_index=imported_count + 1
+                )
+                db.session.add(question)
+                db.session.flush()  # To get the question ID
+                
+                # Parse correct answers (can be multiple numbers like "1,3,5")
+                correct_answer_nums = []
+                if correct_answers:
+                    # Handle different formats: "1", "1,3", "1 3", etc.
+                    correct_answer_nums = re.findall(r'\d+', str(correct_answers))
+                    correct_answer_nums = [int(num) for num in correct_answer_nums]
+                
+                # Add answer options
+                for i in range(1, 7):  # Up to 6 options
+                    option_text = row.get(f'Answer Option {i}', '')
+                    explanation = row.get(f'Explanation {i}', '')
                     
-                    answer_option = AnswerOption(
-                        question_id=question.id,
-                        option_text=process_text_with_images(str(option_text).strip(), package_name),
-                        explanation=process_text_with_images(str(explanation).strip(), package_name) if explanation and str(explanation).strip().lower() != 'nan' else '',
-                        is_correct=is_correct,
-                        option_order=i
-                    )
-                    db.session.add(answer_option)
-            
-            imported_count += 1
+                    if option_text and str(option_text).strip() and str(option_text).strip().lower() != 'nan':
+                        is_correct = i in correct_answer_nums
+                        
+                        # Process option text and explanation with Azure images
+                        processed_option_text = azure_service.process_text_with_images(
+                            str(option_text).strip(), azure_folder
+                        )
+                        processed_option_explanation = azure_service.process_text_with_images(
+                            str(explanation).strip(), azure_folder
+                        ) if explanation and str(explanation).strip().lower() != 'nan' else ''
+                        
+                        answer_option = AnswerOption(
+                            question_id=question.id,
+                            option_text=processed_option_text,
+                            explanation=processed_option_explanation,
+                            is_correct=is_correct,
+                            option_order=i
+                        )
+                        db.session.add(answer_option)
+                
+                imported_count += 1
+                
+            except Exception as e:
+                logger.error(f"Error importing row {index + 1}: {str(e)}")
+                error_count += 1
+                continue
         
         db.session.commit()
         
-        return {
+        result = {
             'imported': imported_count,
-            'skipped': skipped_count
+            'skipped': skipped_count,
+            'errors': error_count
         }
+        
+        if error_count > 0:
+            result['message'] = f"Imported {imported_count} questions, skipped {skipped_count} duplicates, {error_count} errors occurred"
+        else:
+            result['message'] = f"Successfully imported {imported_count} questions, skipped {skipped_count} duplicates"
+        
+        return result
         
     except Exception as e:
         db.session.rollback()
+        logger.error(f"Error in CSV import: {str(e)}")
         raise e
 
-def create_admin_user():
-    """Create an admin user for testing purposes"""
-    from models import User
-    
-    admin_user = User.query.filter_by(email='admin@prepmycert.com').first()
-    if not admin_user:
-        admin_user = User(
-            email='admin@prepmycert.com',
-            first_name='Admin',
-            last_name='User',
-            is_admin=True
-        )
-        admin_user.set_password('admin123')
-        db.session.add(admin_user)
-        db.session.commit()
-        print("Admin user created: admin@prepmycert.com / admin123")
-    else:
-        print("Admin user already exists")
 
-if __name__ == '__main__':
-    from app import app
-    with app.app_context():
-        create_admin_user()
+
+def validate_azure_configuration():
+    """Validate Azure configuration and connectivity"""
+    try:
+        # Check environment variables
+        connection_string = os.environ.get('AZURE_STORAGE_CONNECTION_STRING')
+        container_name = os.environ.get('AZURE_CONTAINER_NAME', 'certification-images')
+        
+        if not connection_string:
+            return {
+                'success': False,
+                'error': 'AZURE_STORAGE_CONNECTION_STRING environment variable not set'
+            }
+        
+        # Test Azure connectivity
+        test_result = azure_service.list_images('test')  # Try to list images in test folder
+        
+        return {
+            'success': True,
+            'message': 'Azure configuration is valid and accessible',
+            'container': container_name
+        }
+        
+    except Exception as e:
+        return {
+            'success': False,
+            'error': f'Azure configuration error: {str(e)}'
+        }
+
+def generate_question_sample_csv():
+    """Generate a sample CSV file format for question import"""
+    import io
+    
+    sample_data = [
+        {
+            'Question': 'What is the primary benefit of using Azure Cognitive Services?',
+            'Question Type': 'multiple-choice',
+            'Answer Option 1': 'Reduced infrastructure costs',
+            'Answer Option 2': 'Pre-built AI capabilities without deep ML expertise',
+            'Answer Option 3': 'Unlimited storage capacity',
+            'Answer Option 4': 'Faster network connectivity',
+            'Explanation 1': 'While cost reduction can be a benefit, it is not the primary advantage.',
+            'Explanation 2': 'Correct! Azure Cognitive Services provides ready-to-use AI APIs that allow developers to add intelligent features without requiring deep machine learning knowledge.',
+            'Explanation 3': 'Storage capacity is not the main focus of Cognitive Services.',
+            'Explanation 4': 'Network connectivity is not related to Cognitive Services functionality.',
+            'Correct Answers': '2',
+            'Overall Explanation': 'Azure Cognitive Services democratizes AI by providing pre-built, easy-to-integrate APIs for common AI scenarios like vision, speech, language, and decision-making.',
+            'Domain': 'Azure AI Services'
+        },
+        {
+            'Question': 'Which Azure service should you use for document analysis and form processing? IMAGE: form-recognizer-example.png',
+            'Question Type': 'multiple-choice',
+            'Answer Option 1': 'Azure Computer Vision',
+            'Answer Option 2': 'Azure Form Recognizer',
+            'Answer Option 3': 'Azure Text Analytics',
+            'Answer Option 4': 'Azure Custom Vision',
+            'Explanation 1': 'Computer Vision is for general image analysis, not specialized document processing.',
+            'Explanation 2': 'Correct! Azure Form Recognizer is specifically designed for extracting text, key-value pairs, and tables from documents and forms.',
+            'Explanation 3': 'Text Analytics is for analyzing text sentiment and entities, not document structure.',
+            'Explanation 4': 'Custom Vision is for training custom image classification models.',
+            'Correct Answers': '2',
+            'Overall Explanation': 'Form Recognizer uses advanced machine learning to extract text, key-value pairs, selection marks, and table data from documents.',
+            'Domain': 'Document Intelligence'
+        }
+    ]
+    
+    df = pd.DataFrame(sample_data)
+    
+    # Convert to CSV string
+    output = io.StringIO()
+    df.to_csv(output, index=False)
+    return output.getvalue()

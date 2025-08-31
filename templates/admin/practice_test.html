@@ -1,0 +1,334 @@
+{% extends 'base.html' %}
+
+{% block title %}Manage Practice Tests - {{ course.title }} - Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid my-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h3 mb-0">Practice Tests</h1>
+                    <p class="text-muted mb-0">
+                        <i class="fas fa-graduation-cap me-1"></i>{{ course.title }}
+                        <span class="mx-2">•</span>
+                        <i class="fab fa-microsoft me-1"></i>{{ course.azure_folder }}
+                    </p>
+                </div>
+                <div>
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createPracticeTestModal">
+                        <i class="fas fa-plus me-2"></i>Create Practice Test
+                    </button>
+                    <a href="{{ url_for('admin_courses') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>Back to Courses
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Course Summary Card -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-primary">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <h5 class="card-title text-primary">{{ course.title }}</h5>
+                            <p class="card-text text-muted">{{ course.description }}</p>
+                            <div class="d-flex gap-3">
+                                <small class="text-muted">
+                                    <i class="fas fa-tag me-1"></i>{{ course.domain }}
+                                </small>
+                                <small class="text-muted">
+                                    <i class="fas fa-dollar-sign me-1"></i>${{ "%.2f"|format(course.price) }}
+                                </small>
+                                <small class="text-muted">
+                                    <i class="fas fa-folder me-1"></i>{{ course.azure_folder }}
+                                </small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="row text-center">
+                                <div class="col-4">
+                                    <div class="h4 mb-0 text-info">{{ practice_tests|length }}</div>
+                                    <small class="text-muted">Practice Tests</small>
+                                </div>
+                                <div class="col-4">
+                                    <div class="h4 mb-0 text-primary">{{ course.question_count }}</div>
+                                    <small class="text-muted">Total Questions</small>
+                                </div>
+                                <div class="col-4">
+                                    <div class="h4 mb-0 text-{{ 'success' if course.is_active else 'secondary' }}">
+                                        {% if course.is_active %}
+                                            <i class="fas fa-check-circle"></i>
+                                        {% else %}
+                                            <i class="fas fa-pause-circle"></i>
+                                        {% endif %}
+                                    </div>
+                                    <small class="text-muted">{{ 'Active' if course.is_active else 'Inactive' }}</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Practice Tests List -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-clipboard-list me-2"></i>Practice Tests
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if practice_tests %}
+                        <div class="row g-4">
+                            {% for practice_test in practice_tests %}
+                            <div class="col-lg-6">
+                                <div class="card h-100 {{ 'border-success' if practice_test.is_active else 'border-secondary' }}">
+                                    <div class="card-header d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h6 class="mb-0">{{ practice_test.title }}</h6>
+                                            {% if practice_test.time_limit_minutes %}
+                                                <small class="text-muted">
+                                                    <i class="fas fa-clock me-1"></i>{{ practice_test.time_limit_minutes }} minutes
+                                                </small>
+                                            {% endif %}
+                                        </div>
+                                        <div class="badge bg-{{ 'success' if practice_test.is_active else 'secondary' }}">
+                                            {{ 'Active' if practice_test.is_active else 'Inactive' }}
+                                        </div>
+                                    </div>
+                                    <div class="card-body">
+                                        <p class="card-text">
+                                            {{ practice_test.description or 'No description provided.' }}
+                                        </p>
+                                        
+                                        <div class="row text-center mb-3">
+                                            <div class="col-6">
+                                                <div class="h5 mb-0 text-primary">{{ practice_test.question_count }}</div>
+                                                <small class="text-muted">Questions</small>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="h5 mb-0 text-info">#{{ practice_test.order_index }}</div>
+                                                <small class="text-muted">Order</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="card-footer">
+                                        <div class="d-flex gap-2">
+                                            <a href="{{ url_for('manage_questions', practice_test_id=practice_test.id) }}" 
+                                               class="btn btn-primary btn-sm flex-fill">
+                                                <i class="fas fa-question-circle me-1"></i>
+                                                Manage Questions
+                                            </a>
+                                            <div class="btn-group" role="group">
+                                                <button type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle" 
+                                                        data-bs-toggle="dropdown">
+                                                    <i class="fas fa-cog"></i>
+                                                </button>
+                                                <ul class="dropdown-menu">
+                                                    <li>
+                                                        <button class="dropdown-item" onclick="editPracticeTest({{ practice_test.id }}, '{{ practice_test.title }}', '{{ practice_test.description or '' }}', {{ practice_test.time_limit_minutes or 'null' }}, {{ practice_test.is_active|lower }})">
+                                                            <i class="fas fa-edit me-2"></i>Edit
+                                                        </button>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item" href="{{ url_for('take_test', practice_test_id=practice_test.id) }}" target="_blank">
+                                                            <i class="fas fa-play me-2"></i>Preview Test
+                                                        </a>
+                                                    </li>
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li>
+                                                        <button class="dropdown-item text-warning" onclick="togglePracticeTestStatus({{ practice_test.id }}, {{ practice_test.is_active|lower }})">
+                                                            {% if practice_test.is_active %}
+                                                                <i class="fas fa-eye-slash me-2"></i>Deactivate
+                                                            {% else %}
+                                                                <i class="fas fa-eye me-2"></i>Activate
+                                                            {% endif %}
+                                                        </button>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-clipboard-list fa-4x text-muted mb-3"></i>
+                            <h5 class="text-muted mb-3">No Practice Tests Created Yet</h5>
+                            <p class="text-muted mb-4">Create your first practice test to start adding questions and organizing your course content.</p>
+                            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createPracticeTestModal">
+                                <i class="fas fa-plus me-2"></i>Create Your First Practice Test
+                            </button>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-bolt me-2"></i>Quick Actions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="d-grid">
+                                <a href="{{ url_for('manage_images', course_id=course.id) }}" class="btn btn-outline-primary">
+                                    <i class="fas fa-images me-2"></i>Manage Images
+                                </a>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="d-grid">
+                                <a href="{{ url_for('import_questions') }}" class="btn btn-outline-secondary">
+                                    <i class="fas fa-file-upload me-2"></i>Import Questions
+                                </a>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="d-grid">
+                                <a href="{{ url_for('edit_course', course_id=course.id) }}" class="btn btn-outline-info">
+                                    <i class="fas fa-edit me-2"></i>Edit Course
+                                </a>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="d-grid">
+                                <a href="{{ url_for('course_detail', course_id=course.id) }}" class="btn btn-outline-success" target="_blank">
+                                    <i class="fas fa-external-link-alt me-2"></i>Preview Course
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create Practice Test Modal -->
+<div class="modal fade" id="createPracticeTestModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('create_practice_test', course_id=course.id) }}">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create New Practice Test</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="title" class="form-label">Title <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="title" name="title" required
+                               placeholder="e.g., Practice Test 1, Mock Exam A, Final Assessment">
+                    </div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="3"
+                                  placeholder="Brief description of what this practice test covers..."></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="time_limit_minutes" class="form-label">Time Limit (minutes)</label>
+                        <input type="number" class="form-control" id="time_limit_minutes" name="time_limit_minutes" 
+                               min="1" max="480" placeholder="90">
+                        <div class="form-text">
+                            Leave empty for no time limit. Recommended: 60-180 minutes for most tests.
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-plus me-2"></i>Create Practice Test
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Practice Test Modal -->
+<div class="modal fade" id="editPracticeTestModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" id="editPracticeTestForm">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Practice Test</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="edit_title" class="form-label">Title <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="edit_title" name="title" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_description" class="form-label">Description</label>
+                        <textarea class="form-control" id="edit_description" name="description" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_time_limit_minutes" class="form-label">Time Limit (minutes)</label>
+                        <input type="number" class="form-control" id="edit_time_limit_minutes" name="time_limit_minutes" 
+                               min="1" max="480">
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="edit_is_active" name="is_active">
+                            <label class="form-check-label" for="edit_is_active">
+                                Active (visible to students)
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function editPracticeTest(id, title, description, timeLimit, isActive) {
+    document.getElementById('editPracticeTestForm').action = `/admin/edit-practice-test/${id}`;
+    document.getElementById('edit_title').value = title;
+    document.getElementById('edit_description').value = description;
+    document.getElementById('edit_time_limit_minutes').value = timeLimit || '';
+    document.getElementById('edit_is_active').checked = isActive;
+    
+    new bootstrap.Modal(document.getElementById('editPracticeTestModal')).show();
+}
+
+function togglePracticeTestStatus(practiceTestId, isCurrentlyActive) {
+    const action = isCurrentlyActive ? 'deactivate' : 'activate';
+    const message = `Are you sure you want to ${action} this practice test?`;
+    
+    if (confirm(message)) {
+        // Create a form and submit it
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/admin/toggle-practice-test-status/${practiceTestId}`;
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+</script>
+{% endblock %}

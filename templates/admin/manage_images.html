@@ -1,0 +1,389 @@
+{% extends 'base.html' %}
+
+{% block title %}Manage Images - {{ course.title }} - Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid my-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h3 mb-0">Image Management</h1>
+                    <p class="text-muted mb-0">
+                        <i class="fas fa-graduation-cap me-1"></i>{{ course.title }}
+                        <span class="mx-2">•</span>
+                        <i class="fab fa-microsoft me-1"></i>{{ course.azure_folder }}
+                    </p>
+                </div>
+                <div>
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadImageModal">
+                        <i class="fas fa-upload me-2"></i>Upload Image
+                    </button>
+                    <a href="{{ url_for('manage_practice_tests', course_id=course.id) }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>Back to Practice Tests
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Azure Storage Info -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-info">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h6 class="text-info mb-1">
+                                <i class="fab fa-microsoft me-2"></i>Azure Blob Storage Location
+                            </h6>
+                            <code class="small">https://prepmycertimages.blob.core.windows.net/certification-images/{{ course.azure_folder }}/</code>
+                            <p class="mb-0 mt-2 small text-muted">
+                                All images for this course are stored in the Azure folder above. Images are secured with SAS tokens and accessible only to students who have purchased the course.
+                            </p>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="row text-center">
+                                <div class="col-6">
+                                    <div class="h4 mb-0 text-primary">{{ images|length }}</div>
+                                    <small class="text-muted">Images</small>
+                                </div>
+                                <div class="col-6">
+                                    <div class="h4 mb-0 text-info">
+                                        {% set total_size = images|sum(attribute='size') %}
+                                        {% if total_size > 1048576 %}
+                                            {{ "%.1f"|format(total_size / 1048576) }} MB
+                                        {% else %}
+                                            {{ "%.0f"|format(total_size / 1024) }} KB
+                                        {% endif %}
+                                    </div>
+                                    <small class="text-muted">Total Size</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Images Grid -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-images me-2"></i>Course Images
+                    </h5>
+                    <div class="btn-group" role="group">
+                        <input type="radio" class="btn-check" name="view-options" id="grid-view" checked>
+                        <label class="btn btn-outline-secondary btn-sm" for="grid-view">
+                            <i class="fas fa-th"></i>
+                        </label>
+                        <input type="radio" class="btn-check" name="view-options" id="list-view">
+                        <label class="btn btn-outline-secondary btn-sm" for="list-view">
+                            <i class="fas fa-list"></i>
+                        </label>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if images %}
+                        <!-- Grid View -->
+                        <div id="grid-view-content" class="row g-4">
+                            {% for image in images %}
+                            <div class="col-lg-3 col-md-4 col-sm-6">
+                                <div class="card h-100">
+                                    <div class="position-relative">
+                                        <img src="{{ image.url }}" class="card-img-top" 
+                                             style="height: 200px; object-fit: cover;" 
+                                             alt="{{ image.filename }}"
+                                             onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'200\' height=\'200\' viewBox=\'0 0 200 200\'%3E%3Crect width=\'200\' height=\'200\' fill=\'%23f8f9fa\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'%236c757d\'%3EImage not found%3C/text%3E%3C/svg%3E'">
+                                        <div class="position-absolute top-0 end-0 p-2">
+                                            <div class="dropdown">
+                                                <button class="btn btn-sm btn-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                                    <i class="fas fa-ellipsis-v"></i>
+                                                </button>
+                                                <ul class="dropdown-menu">
+                                                    <li>
+                                                        <button class="dropdown-item" onclick="copyImageUrl('{{ image.filename }}')">
+                                                            <i class="fas fa-copy me-2"></i>Copy Image Reference
+                                                        </button>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item" href="{{ image.url }}" target="_blank">
+                                                            <i class="fas fa-external-link-alt me-2"></i>View Full Size
+                                                        </a>
+                                                    </li>
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li>
+                                                        <button class="dropdown-item text-danger" onclick="deleteImage('{{ image.filename }}')">
+                                                            <i class="fas fa-trash me-2"></i>Delete
+                                                        </button>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="card-body">
+                                        <h6 class="card-title small mb-1">{{ image.filename }}</h6>
+                                        <div class="d-flex justify-content-between text-muted small">
+                                            <span>
+                                                {% if image.size > 1048576 %}
+                                                    {{ "%.1f"|format(image.size / 1048576) }} MB
+                                                {% else %}
+                                                    {{ "%.0f"|format(image.size / 1024) }} KB
+                                                {% endif %}
+                                            </span>
+                                            <span>{{ image.last_modified.strftime('%m/%d/%Y') if image.last_modified else 'Unknown' }}</span>
+                                        </div>
+                                    </div>
+                                    <div class="card-footer">
+                                        <div class="d-grid">
+                                            <button class="btn btn-sm btn-outline-primary" onclick="copyImageUrl('{{ image.filename }}')">
+                                                <i class="fas fa-copy me-1"></i>Copy Reference
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        <!-- List View (Hidden by default) -->
+                        <div id="list-view-content" class="d-none">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Preview</th>
+                                            <th>Filename</th>
+                                            <th>Size</th>
+                                            <th>Last Modified</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for image in images %}
+                                        <tr>
+                                            <td>
+                                                <img src="{{ image.url }}" class="img-thumbnail" 
+                                                     style="width: 60px; height: 60px; object-fit: cover;" 
+                                                     alt="{{ image.filename }}">
+                                            </td>
+                                            <td>
+                                                <code class="small">{{ image.filename }}</code>
+                                            </td>
+                                            <td>
+                                                {% if image.size > 1048576 %}
+                                                    {{ "%.1f"|format(image.size / 1048576) }} MB
+                                                {% else %}
+                                                    {{ "%.0f"|format(image.size / 1024) }} KB
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {{ image.last_modified.strftime('%m/%d/%Y %I:%M %p') if image.last_modified else 'Unknown' }}
+                                            </td>
+                                            <td>
+                                                <div class="btn-group" role="group">
+                                                    <button class="btn btn-sm btn-outline-primary" onclick="copyImageUrl('{{ image.filename }}')">
+                                                        <i class="fas fa-copy"></i>
+                                                    </button>
+                                                    <a class="btn btn-sm btn-outline-secondary" href="{{ image.url }}" target="_blank">
+                                                        <i class="fas fa-external-link-alt"></i>
+                                                    </a>
+                                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteImage('{{ image.filename }}')">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-images fa-4x text-muted mb-3"></i>
+                            <h5 class="text-muted mb-3">No Images Uploaded Yet</h5>
+                            <p class="text-muted mb-4">Upload images to use in your questions and answer options.</p>
+                            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadImageModal">
+                                <i class="fas fa-upload me-2"></i>Upload Your First Image
+                            </button>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Usage Guide -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-lightbulb me-2"></i>How to Use Images in Questions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Method 1: Simple Syntax (Recommended)</h6>
+                            <p class="small">Use this format in your question text:</p>
+                            <div class="bg-light p-2 rounded">
+                                <code class="small">What is shown in this diagram? IMAGE: your-filename.png</code>
+                            </div>
+                            <p class="small text-muted mt-2">
+                                The system will automatically convert this to Azure URLs with SAS tokens when you save the question.
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Method 2: Direct HTML (Advanced)</h6>
+                            <p class="small">Use standard HTML img tags (system will process these too):</p>
+                            <div class="bg-light p-2 rounded">
+                                <code class="small">&lt;img src="any-path/filename.png" alt="Description" class="img-fluid"&gt;</code>
+                            </div>
+                            <p class="small text-muted mt-2">
+                                The system will automatically update any img tags with the correct Azure URL and SAS token.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info mt-3">
+                        <h6><i class="fas fa-info-circle me-2"></i>Important Notes:</h6>
+                        <ul class="mb-0 small">
+                            <li><strong>Processing:</strong> Images are processed once when you create/edit questions - no processing during test-taking!</li>
+                            <li><strong>Security:</strong> Images are secured with 30-day SAS tokens and only accessible to students who purchased the course</li>
+                            <li><strong>Performance:</strong> Images load instantly during tests since URLs are pre-processed</li>
+                            <li><strong>File Size:</strong> Keep images under 2MB for optimal loading speed</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Image Modal -->
+<div class="modal fade" id="uploadImageModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('upload_image', course_id=course.id) }}" enctype="multipart/form-data">
+                <div class="modal-header">
+                    <h5 class="modal-title">Upload Image</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="image" class="form-label">Select Image File <span class="text-danger">*</span></label>
+                        <input type="file" class="form-control" id="image" name="image" 
+                               accept=".png,.jpg,.jpeg,.gif" required>
+                        <div class="form-text">
+                            Supported formats: PNG, JPG, JPEG, GIF (Max size: 2MB)
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <h6><i class="fas fa-info-circle me-2"></i>File Naming Tips:</h6>
+                        <ul class="mb-0 small">
+                            <li>Use descriptive names: <code>vpc-architecture-diagram.png</code></li>
+                            <li>Avoid spaces: use hyphens or underscores instead</li>
+                            <li>Keep names under 50 characters</li>
+                            <li>Use lowercase for consistency</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-upload me-2"></i>Upload Image
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Copy URL Toast -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+    <div id="copyToast" class="toast hide" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header">
+            <i class="fas fa-copy text-success me-2"></i>
+            <strong class="me-auto">Copied!</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body">
+            Image reference copied to clipboard
+        </div>
+    </div>
+</div>
+
+<script>
+// View toggle
+document.getElementById('grid-view').addEventListener('change', function() {
+    if (this.checked) {
+        document.getElementById('grid-view-content').classList.remove('d-none');
+        document.getElementById('list-view-content').classList.add('d-none');
+    }
+});
+
+document.getElementById('list-view').addEventListener('change', function() {
+    if (this.checked) {
+        document.getElementById('list-view-content').classList.remove('d-none');
+        document.getElementById('grid-view-content').classList.add('d-none');
+    }
+});
+
+function copyImageUrl(filename) {
+    // Create the simple IMAGE syntax for Azure processing
+    const imageCode = `IMAGE: ${filename}`;
+    
+    // Copy to clipboard
+    navigator.clipboard.writeText(imageCode).then(function() {
+        // Update toast message
+        document.querySelector('#copyToast .toast-body').textContent = `Copied: IMAGE: ${filename}`;
+        // Show toast
+        const toast = new bootstrap.Toast(document.getElementById('copyToast'));
+        toast.show();
+    }).catch(function(err) {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = imageCode;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        
+        // Update toast message
+        document.querySelector('#copyToast .toast-body').textContent = `Copied: IMAGE: ${filename}`;
+        // Show toast
+        const toast = new bootstrap.Toast(document.getElementById('copyToast'));
+        toast.show();
+    });
+}
+
+function deleteImage(filename) {
+    if (confirm(`Are you sure you want to delete "${filename}"?\n\nThis action cannot be undone and may break questions that reference this image.`)) {
+        // Create a form and submit it
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/admin/course/{{ course.id }}/delete-image/${encodeURIComponent(filename)}`;
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+// File upload preview
+document.getElementById('image').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        if (file.size > 2 * 1024 * 1024) {
+            alert('File size too large! Please choose an image under 2MB.');
+            e.target.value = '';
+        }
+    }
+});
+</script>
+{% endblock %}

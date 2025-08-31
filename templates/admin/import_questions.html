@@ -1,4 +1,3 @@
-
 {% extends "base.html" %}
 
 {% block title %}Import Questions - Admin - PrepMyCert{% endblock %}
@@ -9,12 +8,17 @@
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <div>
-                    <h1 class="h3 mb-0">Import Questions & Manage Packages</h1>
-                    <p class="text-muted mb-0">Upload CSV files to import questions or create new test packages</p>
+                    <h1 class="h3 mb-0">Import Questions from CSV</h1>
+                    <p class="text-muted mb-0">Upload CSV files to import questions into practice tests</p>
                 </div>
-                <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">
-                    <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
-                </a>
+                <div>
+                    <a href="{{ url_for('api_sample_csv') }}" class="btn btn-outline-secondary me-2">
+                        <i class="fas fa-download me-2"></i>Download Sample CSV
+                    </a>
+                    <a href="{{ url_for('admin_courses') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>Back to Courses
+                    </a>
+                </div>
             </div>
         </div>
     </div>
@@ -24,25 +28,38 @@
             <div class="card">
                 <div class="card-header">
                     <h5 class="mb-0">
-                        <i class="fas fa-upload me-2"></i>Import Questions from CSV
+                        <i class="fas fa-upload me-2"></i>CSV Import
                     </h5>
                 </div>
                 <div class="card-body">
                     <form method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
                         <div class="mb-3">
-                            <label for="test_package_id" class="form-label">Select Test Package</label>
-                            <select class="form-select" id="test_package_id" name="test_package_id" required>
-                                <option value="">Choose a test package...</option>
-                                {% for package in test_packages %}
-                                <option value="{{ package.id }}">{{ package.title }} ({{ package.questions|length }} questions)</option>
+                            <label for="course_id" class="form-label">Select Course <span class="text-danger">*</span></label>
+                            <select class="form-select" id="course_id" name="course_id" required onchange="loadPracticeTests()">
+                                <option value="">Choose a course...</option>
+                                {% for course in courses %}
+                                <option value="{{ course.id }}" data-azure-folder="{{ course.azure_folder }}">
+                                    {{ course.title }} ({{ course.practice_test_count }} practice tests)
+                                </option>
                                 {% endfor %}
                             </select>
-                            <div class="invalid-feedback">Please select a test package.</div>
+                            <div class="invalid-feedback">Please select a course.</div>
                         </div>
 
                         <div class="mb-3">
-                            <label for="file" class="form-label">CSV File</label>
+                            <label for="practice_test_id" class="form-label">Select Practice Test <span class="text-danger">*</span></label>
+                            <select class="form-select" id="practice_test_id" name="practice_test_id" required disabled>
+                                <option value="">First select a course...</option>
+                            </select>
+                            <div class="invalid-feedback">Please select a practice test.</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="file" class="form-label">CSV File <span class="text-danger">*</span></label>
                             <input type="file" class="form-control" id="file" name="file" accept=".csv" required>
+                            <div class="form-text">
+                                Upload a CSV file with questions, answer options, and explanations
+                            </div>
                             <div class="invalid-feedback">Please select a CSV file.</div>
                         </div>
 
@@ -62,19 +79,90 @@
                     </h5>
                 </div>
                 <div class="card-body">
-                    <p>Your CSV file should have the following columns:</p>
-                    <ul>
-                        <li><strong>Question</strong> - The question text</li>
-                        <li><strong>Question Type</strong> - Type of question (e.g., multiple-choice)</li>
-                        <li><strong>Answer Option 1-6</strong> - Up to 6 answer options</li>
-                        <li><strong>Explanation 1-6</strong> - Explanations for each answer option</li>
-                        <li><strong>Correct Answers</strong> - Numbers of correct options (e.g., "1", "1,3", "2")</li>
-                        <li><strong>Overall Explanation</strong> - General explanation for the question</li>
-                        <li><strong>Domain</strong> - The domain/category of the question</li>
-                    </ul>
+                    <p>Your CSV file must include these columns (column names are case-sensitive):</p>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Required Columns:</h6>
+                            <ul>
+                                <li><strong>Question</strong> - The question text</li>
+                                <li><strong>Question Type</strong> - Type of question (e.g., multiple-choice)</li>
+                                <li><strong>Answer Option 1-6</strong> - Up to 6 answer options</li>
+                                <li><strong>Correct Answers</strong> - Numbers of correct options (e.g., "1", "1,3", "2")</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Optional Columns:</h6>
+                            <ul>
+                                <li><strong>Explanation 1-6</strong> - Explanations for each answer option</li>
+                                <li><strong>Overall Explanation</strong> - General explanation for the question</li>
+                                <li><strong>Domain</strong> - The domain/category of the question</li>
+                            </ul>
+                        </div>
+                    </div>
                     <div class="alert alert-info">
                         <i class="fas fa-info-circle me-2"></i>
-                        Questions that already exist in the selected package will be skipped.
+                        Questions with identical text in the selected practice test will be skipped to avoid duplicates.
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-image me-2"></i>Including Images in CSV Import
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3" id="azure-info" style="display: none;">
+                        <div class="alert alert-primary">
+                            <h6><i class="fab fa-microsoft me-2"></i>Azure Folder: <code id="selected-azure-folder">Select a course</code></h6>
+                            <p class="mb-0 small">Images for the selected course are stored in this Azure folder.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <h6 class="small">Step 1: Upload Images First</h6>
+                        <p class="small mb-2">Before importing your CSV, upload images using the course image management:</p>
+                        <ol class="small">
+                            <li>Go to Courses → Select Course → Manage Images</li>
+                            <li>Upload your image files (PNG, JPG, JPEG, GIF)</li>
+                            <li>Note the exact filenames for use in CSV</li>
+                        </ol>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <h6 class="small">Step 2: Reference Images in CSV</h6>
+                        <p class="small mb-2">In your CSV file, use one of these methods to reference uploaded images:</p>
+                        
+                        <div class="mb-3">
+                            <strong class="small">Method 1: Simple Syntax (Recommended)</strong>
+                            <div class="bg-light p-2 rounded mt-1">
+                                <code class="small">What is shown in this diagram? IMAGE: vpc-architecture.png</code>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <strong class="small">Method 2: Direct HTML</strong>
+                            <div class="bg-light p-2 rounded mt-1">
+                                <code class="small">&lt;img src="/static/images/questions/[folder]/filename.png" alt="Description" class="img-fluid"&gt;</code>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-success">
+                        <h6><i class="fas fa-bolt me-2"></i>Automatic Processing</h6>
+                        <p class="mb-0 small">
+                            The system will automatically convert image references to secure Azure URLs with SAS tokens during import. 
+                            Images will load instantly during tests with no processing delays!
+                        </p>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <h6 class="small">CSV Example with Images:</h6>
+                        <div class="bg-light p-2 rounded">
+                            <pre class="small mb-0">Question,Question Type,Answer Option 1,Answer Option 2,Correct Answers,Domain
+"What architecture is shown? IMAGE: vpc-diagram.png",multiple-choice,"Single AZ deployment","Multi-AZ with Load Balancer","2","Cloud Computing"</pre>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -83,94 +171,163 @@
         <div class="col-lg-4">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-plus me-2"></i>Create New Test Package
-                    </h5>
+                    <h6 class="mb-0">
+                        <i class="fas fa-graduation-cap me-2"></i>Course Overview
+                    </h6>
                 </div>
                 <div class="card-body">
-                    <form method="POST" action="{{ url_for('create_package') }}" class="needs-validation" novalidate>
-                        <div class="mb-3">
-                            <label for="title" class="form-label">Package Title</label>
-                            <input type="text" class="form-control" id="title" name="title" required>
-                            <div class="invalid-feedback">Please provide a title.</div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="description" class="form-label">Description</label>
-                            <textarea class="form-control" id="description" name="description" rows="3" required></textarea>
-                            <div class="invalid-feedback">Please provide a description.</div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="price" class="form-label">Price ($)</label>
-                            <input type="number" class="form-control" id="price" name="price" min="0" step="0.01" required>
-                            <div class="invalid-feedback">Please provide a valid price.</div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="domain" class="form-label">Domain</label>
-                            <input type="text" class="form-control" id="domain" name="domain" required 
-                                   placeholder="e.g., Cloud Computing, Cybersecurity">
-                            <div class="invalid-feedback">Please provide a domain.</div>
-                        </div>
-
-                        <div class="d-grid">
-                            <button type="submit" class="btn btn-success">
-                                <i class="fas fa-plus me-2"></i>Create Package
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            <div class="card mt-4">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-list me-2"></i>Existing Packages
-                    </h5>
-                </div>
-                <div class="card-body">
-                    {% if test_packages %}
-                        <div class="list-group list-group-flush">
-                            {% for package in test_packages %}
-                            <div class="list-group-item d-flex justify-content-between align-items-center px-0">
-                                <div>
-                                    <h6 class="mb-1">{{ package.title }}</h6>
-                                    <small class="text-muted">{{ package.questions|length }} questions</small>
+                    {% if courses %}
+                        <div class="list-group list-group-flush" style="margin: -1rem;">
+                            {% for course in courses %}
+                            <div class="list-group-item d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-1">{{ course.title }}</h6>
+                                    <p class="mb-1 small text-muted">{{ course.description[:60] }}{% if course.description|length > 60 %}...{% endif %}</p>
+                                    <div class="d-flex gap-3">
+                                        <small class="text-muted">
+                                            <i class="fas fa-clipboard-list me-1"></i>{{ course.practice_test_count }} tests
+                                        </small>
+                                        <small class="text-muted">
+                                            <i class="fas fa-question-circle me-1"></i>{{ course.question_count }} questions
+                                        </small>
+                                    </div>
+                                    <small class="text-muted">
+                                        <i class="fab fa-microsoft me-1"></i>{{ course.azure_folder }}
+                                    </small>
                                 </div>
-                                <a href="{{ url_for('manage_questions', package_id=package.id) }}" 
-                                   class="btn btn-outline-primary btn-sm">
-                                    <i class="fas fa-edit"></i> Manage
-                                </a>
+                                <div class="btn-group-vertical">
+                                    <a href="{{ url_for('manage_practice_tests', course_id=course.id) }}" 
+                                       class="btn btn-outline-primary btn-sm">
+                                        <i class="fas fa-clipboard-list me-1"></i>Manage
+                                    </a>
+                                    <a href="{{ url_for('manage_images', course_id=course.id) }}" 
+                                       class="btn btn-outline-secondary btn-sm mt-1">
+                                        <i class="fas fa-images me-1"></i>Images
+                                    </a>
+                                </div>
                             </div>
                             {% endfor %}
                         </div>
                     {% else %}
-                        <p class="text-muted">No test packages available. Create one above to get started.</p>
+                        <div class="text-center py-4">
+                            <i class="fas fa-graduation-cap fa-3x text-muted mb-3"></i>
+                            <p class="text-muted mb-0">No courses available.</p>
+                            <small class="text-muted">Create a course first to import questions.</small>
+                            <div class="mt-3">
+                                <a href="{{ url_for('create_course') }}" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-plus me-1"></i>Create Course
+                                </a>
+                            </div>
+                        </div>
                     {% endif %}
                 </div>
             </div>
-            
+
             <div class="card mt-4">
                 <div class="card-header">
                     <h6 class="mb-0">
-                        <i class="fas fa-info-circle me-2"></i>Image Support
+                        <i class="fas fa-lightbulb me-2"></i>Import Tips & Best Practices
                     </h6>
                 </div>
                 <div class="card-body">
-                    <p class="small">To include images in your questions:</p>
-                    <ol class="small">
-                        <li>Upload images to <code>/static/images/questions/[package_name]/</code></li>
-                        <li>Use <code>IMAGE: filename.png</code> in your CSV or question text</li>
-                        <li>Each package gets its own image folder automatically</li>
-                    </ol>
-                    <div class="alert alert-warning alert-sm">
-                        <i class="fas fa-exclamation-triangle me-1"></i>
-                        <small>Package names are converted to safe folder names (spaces become underscores, special characters removed)</small>
+                    <ul class="small mb-0">
+                        <li><strong>Test your CSV first:</strong> Try importing with just a few questions to verify format</li>
+                        <li><strong>Use UTF-8 encoding:</strong> Save your CSV with UTF-8 encoding for special characters</li>
+                        <li><strong>Upload images first:</strong> Upload all images before running CSV import</li>
+                        <li><strong>Use consistent naming:</strong> Use descriptive, consistent filenames for images</li>
+                        <li><strong>Check for duplicates:</strong> System automatically skips questions with identical text</li>
+                        <li><strong>Review after import:</strong> Always review imported questions for formatting and accuracy</li>
+                        <li><strong>Backup your data:</strong> Keep a copy of your original CSV file</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-download me-2"></i>Sample Files
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('api_sample_csv') }}" class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-file-csv me-2"></i>Download Sample CSV
+                        </a>
+                        <small class="text-muted text-center">
+                            Includes example questions with image references
+                        </small>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+// Form validation
+(function() {
+    'use strict';
+    window.addEventListener('load', function() {
+        var forms = document.getElementsByClassName('needs-validation');
+        var validation = Array.prototype.filter.call(forms, function(form) {
+            form.addEventListener('submit', function(event) {
+                if (form.checkValidity() === false) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+                form.classList.add('was-validated');
+            }, false);
+        });
+    }, false);
+})();
+
+async function loadPracticeTests() {
+    const courseSelect = document.getElementById('course_id');
+    const practiceTestSelect = document.getElementById('practice_test_id');
+    const azureInfo = document.getElementById('azure-info');
+    const azureFolderSpan = document.getElementById('selected-azure-folder');
+    
+    const courseId = courseSelect.value;
+    
+    if (!courseId) {
+        practiceTestSelect.innerHTML = '<option value="">First select a course...</option>';
+        practiceTestSelect.disabled = true;
+        azureInfo.style.display = 'none';
+        return;
+    }
+    
+    // Show Azure folder info
+    const selectedOption = courseSelect.options[courseSelect.selectedIndex];
+    const azureFolder = selectedOption.getAttribute('data-azure-folder');
+    azureFolderSpan.textContent = azureFolder;
+    azureInfo.style.display = 'block';
+    
+    // Load practice tests
+    practiceTestSelect.innerHTML = '<option value="">Loading practice tests...</option>';
+    practiceTestSelect.disabled = true;
+    
+    try {
+        const response = await fetch(`/api/practice-tests/${courseId}`);
+        const data = await response.json();
+        
+        if (data.practice_tests && data.practice_tests.length > 0) {
+            practiceTestSelect.innerHTML = '<option value="">Choose a practice test...</option>';
+            data.practice_tests.forEach(test => {
+                const option = document.createElement('option');
+                option.value = test.id;
+                option.textContent = `${test.title} (${test.question_count} questions)`;
+                practiceTestSelect.appendChild(option);
+            });
+            practiceTestSelect.disabled = false;
+        } else {
+            practiceTestSelect.innerHTML = '<option value="">No practice tests found</option>';
+            practiceTestSelect.disabled = true;
+        }
+    } catch (error) {
+        practiceTestSelect.innerHTML = '<option value="">Error loading practice tests</option>';
+        practiceTestSelect.disabled = true;
+        console.error('Error loading practice tests:', error);
+    }
+}
+</script>
 {% endblock %}

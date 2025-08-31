@@ -1,0 +1,274 @@
+{% extends 'base.html' %}
+
+{% block title %}Admin - Manage Courses{% endblock %}
+
+{% block content %}
+<div class="container-fluid my-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h3 mb-0">Course Management</h1>
+                    <p class="text-muted mb-0">Manage courses, practice tests, and questions</p>
+                </div>
+                <div>
+                    <a href="{{ url_for('create_course') }}" class="btn btn-primary">
+                        <i class="fas fa-plus me-2"></i>Create New Course
+                    </a>
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats Row -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-white-75 small">Total Courses</div>
+                            <div class="text-lg fw-bold">{{ courses|length }}</div>
+                        </div>
+                        <div class="text-white-50">
+                            <i class="fas fa-graduation-cap fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-white-75 small">Active Courses</div>
+                            <div class="text-lg fw-bold">{{ courses|selectattr('is_active')|list|length }}</div>
+                        </div>
+                        <div class="text-white-50">
+                            <i class="fas fa-check-circle fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-white-75 small">Practice Tests</div>
+                            <div class="text-lg fw-bold">{{ courses|sum(attribute='practice_test_count') }}</div>
+                        </div>
+                        <div class="text-white-50">
+                            <i class="fas fa-clipboard-list fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-white-75 small">Total Questions</div>
+                            <div class="text-lg fw-bold">{{ courses|sum(attribute='question_count') }}</div>
+                        </div>
+                        <div class="text-white-50">
+                            <i class="fas fa-question-circle fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Courses Table -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-graduation-cap me-2"></i>All Courses
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if courses %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Course</th>
+                                        <th>Domain</th>
+                                        <th>Azure Folder</th>
+                                        <th>Price</th>
+                                        <th>Practice Tests</th>
+                                        <th>Questions</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for course in courses %}
+                                    <tr>
+                                        <td>
+                                            <div>
+                                                <strong class="text-primary">{{ course.title }}</strong>
+                                                <br>
+                                                <small class="text-muted">
+                                                    {{ course.description[:80] }}{% if course.description|length > 80 %}...{% endif %}
+                                                </small>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-secondary">{{ course.domain }}</span>
+                                        </td>
+                                        <td>
+                                            <code class="small">{{ course.azure_folder }}</code>
+                                        </td>
+                                        <td>
+                                            <strong class="text-success">${{ "%.2f"|format(course.price) }}</strong>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-info">{{ course.practice_test_count }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-primary">{{ course.question_count }}</span>
+                                        </td>
+                                        <td>
+                                            {% if course.is_active %}
+                                                <span class="badge bg-success">Active</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">Inactive</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <div class="btn-group" role="group">
+                                                <button type="button" class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
+                                                    Actions
+                                                </button>
+                                                <ul class="dropdown-menu">
+                                                    <li>
+                                                        <a class="dropdown-item" href="{{ url_for('manage_practice_tests', course_id=course.id) }}">
+                                                            <i class="fas fa-clipboard-list me-2"></i>Manage Practice Tests
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item" href="{{ url_for('manage_images', course_id=course.id) }}">
+                                                            <i class="fas fa-images me-2"></i>Manage Images
+                                                        </a>
+                                                    </li>
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li>
+                                                        <a class="dropdown-item" href="{{ url_for('edit_course', course_id=course.id) }}">
+                                                            <i class="fas fa-edit me-2"></i>Edit Course
+                                                        </a>
+                                                    </li>
+                                                    <li>
+                                                        <a class="dropdown-item" href="{{ url_for('course_detail', course_id=course.id) }}" target="_blank">
+                                                            <i class="fas fa-external-link-alt me-2"></i>Preview Course
+                                                        </a>
+                                                    </li>
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li>
+                                                        <a class="dropdown-item text-warning" href="#" onclick="toggleCourseStatus({{ course.id }}, {{ course.is_active|lower }})">
+                                                            {% if course.is_active %}
+                                                                <i class="fas fa-eye-slash me-2"></i>Deactivate
+                                                            {% else %}
+                                                                <i class="fas fa-eye me-2"></i>Activate
+                                                            {% endif %}
+                                                        </a>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-graduation-cap fa-4x text-muted mb-3"></i>
+                            <h5 class="text-muted mb-3">No Courses Created Yet</h5>
+                            <p class="text-muted mb-4">Create your first course to start building practice tests and questions.</p>
+                            <a href="{{ url_for('create_course') }}" class="btn btn-primary">
+                                <i class="fas fa-plus me-2"></i>Create Your First Course
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions Card -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-bolt me-2"></i>Quick Actions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="d-grid">
+                                <a href="{{ url_for('import_questions') }}" class="btn btn-outline-primary">
+                                    <i class="fas fa-file-upload me-2"></i>Import Questions from CSV
+                                </a>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-grid">
+                                <a href="{{ url_for('api_sample_csv') }}" class="btn btn-outline-secondary">
+                                    <i class="fas fa-download me-2"></i>Download Sample CSV
+                                </a>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-grid">
+                                <a href="{{ url_for('admin_users') }}" class="btn btn-outline-info">
+                                    <i class="fas fa-users me-2"></i>Manage Users
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleCourseStatus(courseId, isCurrentlyActive) {
+    const action = isCurrentlyActive ? 'deactivate' : 'activate';
+    const message = `Are you sure you want to ${action} this course?`;
+    
+    if (confirm(message)) {
+        // Create a form and submit it
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/admin/toggle-course-status/${courseId}`;
+        
+        // Add CSRF token if needed
+        const csrfToken = document.querySelector('meta[name="csrf-token"]');
+        if (csrfToken) {
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = csrfToken.getAttribute('content');
+            form.appendChild(csrfInput);
+        }
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+</script>
+{% endblock %}

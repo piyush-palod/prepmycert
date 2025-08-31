@@ -1,0 +1,276 @@
+{% extends 'base.html' %}
+
+{% block title %}Create Course - Admin - PrepMyCert{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h3 mb-0">Create New Course</h1>
+                    <p class="text-muted mb-0">Set up a new course with practice tests and questions</p>
+                </div>
+                <a href="{{ url_for('admin_courses') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Courses
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-graduation-cap me-2"></i>Course Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" class="needs-validation" novalidate>
+                        <div class="mb-3">
+                            <label for="title" class="form-label">Course Title <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="title" name="title" required
+                                   placeholder="e.g., AI-102 Azure AI Engineer Associate">
+                            <div class="form-text">
+                                Choose a clear, descriptive title that matches the certification name
+                            </div>
+                            <div class="invalid-feedback">
+                                Please provide a course title.
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Course Description <span class="text-danger">*</span></label>
+                            <textarea class="form-control" id="description" name="description" rows="4" required
+                                      placeholder="Comprehensive preparation for the AI-102 Azure AI Engineer Associate certification. Master Azure AI services, cognitive services, and machine learning solutions."></textarea>
+                            <div class="form-text">
+                                Detailed description that will be shown to students on the course page
+                            </div>
+                            <div class="invalid-feedback">
+                                Please provide a course description.
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="price" class="form-label">Price (USD) <span class="text-danger">*</span></label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        <input type="number" class="form-control" id="price" name="price" 
+                                               min="0" step="0.01" required placeholder="49.99">
+                                    </div>
+                                    <div class="form-text">
+                                        One-time price for lifetime access to the entire course
+                                    </div>
+                                    <div class="invalid-feedback">
+                                        Please provide a valid price.
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="domain" class="form-label">Domain <span class="text-danger">*</span></label>
+                                    <select class="form-select" id="domain" name="domain" required>
+                                        <option value="">Select a domain</option>
+                                        <option value="Cloud Computing">Cloud Computing</option>
+                                        <option value="Cloud Computing - AI">Cloud Computing - AI</option>
+                                        <option value="Cloud Computing - Data">Cloud Computing - Data</option>
+                                        <option value="Cybersecurity">Cybersecurity</option>
+                                        <option value="Networking">Networking</option>
+                                        <option value="Project Management">Project Management</option>
+                                        <option value="Software Development">Software Development</option>
+                                        <option value="Database">Database</option>
+                                        <option value="DevOps">DevOps</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                    <div class="form-text">
+                                        Category that best describes this course
+                                    </div>
+                                    <div class="invalid-feedback">
+                                        Please select a domain.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="azure_folder" class="form-label">Azure Folder Name <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="fab fa-microsoft text-primary"></i>
+                                </span>
+                                <input type="text" class="form-control" id="azure_folder" name="azure_folder" required
+                                       placeholder="ai-102" pattern="[a-z0-9-]+" title="Only lowercase letters, numbers, and hyphens">
+                            </div>
+                            <div class="form-text">
+                                <strong>Important:</strong> This folder name will be used to organize images in Azure Blob Storage.<br>
+                                <code>https://prepmycertimages.blob.core.windows.net/certification-images/<span id="folder-preview">your-folder</span>/</code><br>
+                                <small class="text-muted">Use only lowercase letters, numbers, and hyphens. Cannot be changed after creation.</small>
+                            </div>
+                            <div class="invalid-feedback">
+                                Please provide a valid folder name (lowercase letters, numbers, and hyphens only).
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-plus me-2"></i>Create Course
+                            </button>
+                            <a href="{{ url_for('admin_courses') }}" class="btn btn-outline-secondary">
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <!-- Course Creation Guide -->
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-lightbulb me-2"></i>Course Creation Guide
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <h6 class="small fw-bold">1. Plan Your Course Structure</h6>
+                        <p class="small text-muted mb-2">
+                            After creating the course, you'll be able to:
+                        </p>
+                        <ul class="small text-muted">
+                            <li>Create multiple practice tests</li>
+                            <li>Add questions to each practice test</li>
+                            <li>Upload and organize images</li>
+                            <li>Import questions via CSV</li>
+                        </ul>
+                    </div>
+
+                    <div class="mb-3">
+                        <h6 class="small fw-bold">2. Azure Folder Naming</h6>
+                        <p class="small text-muted mb-2">
+                            Choose a folder name that matches your course:
+                        </p>
+                        <ul class="small text-muted">
+                            <li><code>ai-102</code> → AI-102 certification</li>
+                            <li><code>az-900</code> → Azure Fundamentals</li>
+                            <li><code>aws-saa</code> → AWS Solutions Architect</li>
+                            <li><code>comptia-security</code> → CompTIA Security+</li>
+                        </ul>
+                    </div>
+
+                    <div class="mb-3">
+                        <h6 class="small fw-bold">3. Pricing Strategy</h6>
+                        <p class="small text-muted">
+                            Consider these factors:
+                        </p>
+                        <ul class="small text-muted">
+                            <li>Competitive market pricing</li>
+                            <li>Number of practice tests included</li>
+                            <li>Lifetime access value</li>
+                            <li>Course difficulty level</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Azure Integration Status -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fab fa-microsoft me-2"></i>Azure Integration Status
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="spinner-border spinner-border-sm me-2" role="status" id="azure-spinner">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <span class="small" id="azure-status">Checking Azure connectivity...</span>
+                    </div>
+                    <div class="mt-2" id="azure-details" style="display: none;">
+                        <small class="text-muted">
+                            <strong>Container:</strong> certification-images<br>
+                            <strong>Account:</strong> prepmycertimages<br>
+                            <strong>Status:</strong> <span id="azure-connection-status">Ready</span>
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Form validation
+(function() {
+    'use strict';
+    window.addEventListener('load', function() {
+        var forms = document.getElementsByClassName('needs-validation');
+        var validation = Array.prototype.filter.call(forms, function(form) {
+            form.addEventListener('submit', function(event) {
+                if (form.checkValidity() === false) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+                form.classList.add('was-validated');
+            }, false);
+        });
+    }, false);
+})();
+
+// Real-time folder preview
+document.getElementById('azure_folder').addEventListener('input', function(e) {
+    const folderName = e.target.value || 'your-folder';
+    document.getElementById('folder-preview').textContent = folderName;
+});
+
+// Auto-suggest folder name based on title
+document.getElementById('title').addEventListener('input', function(e) {
+    const title = e.target.value.toLowerCase();
+    let suggestion = '';
+    
+    if (title.includes('ai-102') || title.includes('ai 102')) {
+        suggestion = 'ai-102';
+    } else if (title.includes('az-900') || title.includes('az 900')) {
+        suggestion = 'az-900';
+    } else if (title.includes('aws') && title.includes('architect')) {
+        suggestion = 'aws-saa';
+    } else if (title.includes('security+') || title.includes('security plus')) {
+        suggestion = 'comptia-security';
+    } else if (title.includes('ccna')) {
+        suggestion = 'cisco-ccna';
+    } else if (title.includes('pmp')) {
+        suggestion = 'pmp';
+    } else {
+        // Generate suggestion from title
+        suggestion = title.replace(/[^a-z0-9\s]/g, '')
+                          .replace(/\s+/g, '-')
+                          .substring(0, 20);
+    }
+    
+    const folderInput = document.getElementById('azure_folder');
+    if (!folderInput.value && suggestion) {
+        folderInput.placeholder = suggestion;
+    }
+});
+
+// Check Azure connectivity (mock for now - you can implement actual check)
+setTimeout(function() {
+    const spinner = document.getElementById('azure-spinner');
+    const status = document.getElementById('azure-status');
+    const details = document.getElementById('azure-details');
+    const connectionStatus = document.getElementById('azure-connection-status');
+    
+    // Simulate Azure check
+    spinner.style.display = 'none';
+    status.innerHTML = '<i class="fas fa-check-circle text-success me-1"></i>Azure connected successfully';
+    connectionStatus.textContent = 'Ready';
+    connectionStatus.className = 'text-success';
+    details.style.display = 'block';
+}, 2000);
+</script>
+{% endblock %}

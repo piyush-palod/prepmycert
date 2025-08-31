@@ -1,0 +1,283 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit Course - {{ course.title }} - Admin{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h3 mb-0">Edit Course</h1>
+                    <p class="text-muted mb-0">{{ course.title }}</p>
+                </div>
+                <div>
+                    <a href="{{ url_for('manage_practice_tests', course_id=course.id) }}" class="btn btn-outline-primary me-2">
+                        <i class="fas fa-clipboard-list me-2"></i>Manage Practice Tests
+                    </a>
+                    <a href="{{ url_for('admin_courses') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>Back to Courses
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-edit me-2"></i>Course Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" class="needs-validation" novalidate>
+                        <div class="mb-3">
+                            <label for="title" class="form-label">Course Title <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="title" name="title" required
+                                   value="{{ course.title }}">
+                            <div class="form-text">
+                                The main title displayed to students
+                            </div>
+                            <div class="invalid-feedback">
+                                Please provide a course title.
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Course Description <span class="text-danger">*</span></label>
+                            <textarea class="form-control" id="description" name="description" rows="4" required>{{ course.description }}</textarea>
+                            <div class="form-text">
+                                Detailed description shown on the course page
+                            </div>
+                            <div class="invalid-feedback">
+                                Please provide a course description.
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="price" class="form-label">Price (USD) <span class="text-danger">*</span></label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">$</span>
+                                        <input type="number" class="form-control" id="price" name="price" 
+                                               min="0" step="0.01" required value="{{ course.price }}">
+                                    </div>
+                                    <div class="form-text">
+                                        One-time price for lifetime access
+                                    </div>
+                                    <div class="invalid-feedback">
+                                        Please provide a valid price.
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="domain" class="form-label">Domain <span class="text-danger">*</span></label>
+                                    <select class="form-select" id="domain" name="domain" required>
+                                        <option value="">Select a domain</option>
+                                        <option value="Cloud Computing" {{ 'selected' if course.domain == 'Cloud Computing' }}>Cloud Computing</option>
+                                        <option value="Cloud Computing - AI" {{ 'selected' if course.domain == 'Cloud Computing - AI' }}>Cloud Computing - AI</option>
+                                        <option value="Cloud Computing - Data" {{ 'selected' if course.domain == 'Cloud Computing - Data' }}>Cloud Computing - Data</option>
+                                        <option value="Cybersecurity" {{ 'selected' if course.domain == 'Cybersecurity' }}>Cybersecurity</option>
+                                        <option value="Networking" {{ 'selected' if course.domain == 'Networking' }}>Networking</option>
+                                        <option value="Project Management" {{ 'selected' if course.domain == 'Project Management' }}>Project Management</option>
+                                        <option value="Software Development" {{ 'selected' if course.domain == 'Software Development' }}>Software Development</option>
+                                        <option value="Database" {{ 'selected' if course.domain == 'Database' }}>Database</option>
+                                        <option value="DevOps" {{ 'selected' if course.domain == 'DevOps' }}>DevOps</option>
+                                        <option value="Other" {{ 'selected' if course.domain == 'Other' }}>Other</option>
+                                    </select>
+                                    <div class="form-text">
+                                        Category for this course
+                                    </div>
+                                    <div class="invalid-feedback">
+                                        Please select a domain.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="azure_folder" class="form-label">Azure Folder Name <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="fab fa-microsoft text-primary"></i>
+                                </span>
+                                <input type="text" class="form-control" id="azure_folder" name="azure_folder" required
+                                       value="{{ course.azure_folder }}" pattern="[a-z0-9-]+" title="Only lowercase letters, numbers, and hyphens">
+                            </div>
+                            <div class="form-text">
+                                <strong>Current Azure path:</strong><br>
+                                <code>https://prepmycertimages.blob.core.windows.net/certification-images/{{ course.azure_folder }}/</code><br>
+                                <small class="text-warning">⚠️ Changing this may break existing image references in questions!</small>
+                            </div>
+                            <div class="invalid-feedback">
+                                Please provide a valid folder name (lowercase letters, numbers, and hyphens only).
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="is_active" name="is_active" {{ 'checked' if course.is_active }}>
+                                <label class="form-check-label" for="is_active">
+                                    <strong>Course is Active</strong>
+                                </label>
+                            </div>
+                            <div class="form-text">
+                                Inactive courses are hidden from students and cannot be purchased
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i>Save Changes
+                            </button>
+                            <a href="{{ url_for('admin_courses') }}" class="btn btn-outline-secondary">
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <!-- Course Statistics -->
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-chart-bar me-2"></i>Course Statistics
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <div class="h4 mb-0 text-primary">{{ course.practice_test_count }}</div>
+                            <small class="text-muted">Practice Tests</small>
+                        </div>
+                        <div class="col-6">
+                            <div class="h4 mb-0 text-info">{{ course.question_count }}</div>
+                            <small class="text-muted">Total Questions</small>
+                        </div>
+                    </div>
+                    <div class="mt-3 text-center">
+                        <div class="h5 mb-0 text-{{ 'success' if course.is_active else 'secondary' }}">
+                            {% if course.is_active %}
+                                <i class="fas fa-check-circle me-1"></i>Active
+                            {% else %}
+                                <i class="fas fa-pause-circle me-1"></i>Inactive
+                            {% endif %}
+                        </div>
+                        <small class="text-muted">Course Status</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-bolt me-2"></i>Quick Actions
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('manage_practice_tests', course_id=course.id) }}" class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-clipboard-list me-2"></i>Manage Practice Tests
+                        </a>
+                        <a href="{{ url_for('manage_images', course_id=course.id) }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-images me-2"></i>Manage Images
+                        </a>
+                        <a href="{{ url_for('course_detail', course_id=course.id) }}" class="btn btn-outline-success btn-sm" target="_blank">
+                            <i class="fas fa-external-link-alt me-2"></i>Preview Course
+                        </a>
+                        <hr class="my-2">
+                        <button type="button" class="btn btn-outline-warning btn-sm" onclick="toggleStatus()">
+                            {% if course.is_active %}
+                                <i class="fas fa-eye-slash me-2"></i>Deactivate Course
+                            {% else %}
+                                <i class="fas fa-eye me-2"></i>Activate Course
+                            {% endif %}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Azure Info -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fab fa-microsoft me-2"></i>Azure Integration
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <strong class="small">Storage Account:</strong><br>
+                        <code class="small">prepmycertimages</code>
+                    </div>
+                    <div class="mb-2">
+                        <strong class="small">Container:</strong><br>
+                        <code class="small">certification-images</code>
+                    </div>
+                    <div class="mb-2">
+                        <strong class="small">Course Folder:</strong><br>
+                        <code class="small">{{ course.azure_folder }}</code>
+                    </div>
+                    <div class="alert alert-info alert-sm mt-3">
+                        <small>
+                            <i class="fas fa-info-circle me-1"></i>
+                            All images for this course are stored in the Azure folder above. 
+                            Images are secured with SAS tokens.
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Form validation
+(function() {
+    'use strict';
+    window.addEventListener('load', function() {
+        var forms = document.getElementsByClassName('needs-validation');
+        var validation = Array.prototype.filter.call(forms, function(form) {
+            form.addEventListener('submit', function(event) {
+                if (form.checkValidity() === false) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+                form.classList.add('was-validated');
+            }, false);
+        });
+    }, false);
+})();
+
+function toggleStatus() {
+    const isActive = {{ course.is_active|lower }};
+    const action = isActive ? 'deactivate' : 'activate';
+    const message = `Are you sure you want to ${action} this course?\n\nThis will ${isActive ? 'hide' : 'show'} the course from students.`;
+    
+    if (confirm(message)) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{{ url_for("toggle_course_status", course_id=course.id) }}';
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
+// Warning for Azure folder change
+document.getElementById('azure_folder').addEventListener('change', function(e) {
+    if (e.target.value !== '{{ course.azure_folder }}') {
+        if (!confirm('Changing the Azure folder name may break existing image references in questions.\n\nAre you sure you want to change it?')) {
+            e.target.value = '{{ course.azure_folder }}';
+        }
+    }
+});
+</script>
+{% endblock %}
