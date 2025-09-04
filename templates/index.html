@@ -12,8 +12,8 @@
                     Comprehensive test preparation platform for cloud computing, cybersecurity, networking, and project management certifications. One-time purchase, lifetime access.
                 </p>
                 <div class="d-flex gap-3">
-                    <a href="{{ url_for('test_packages') }}" class="btn btn-success btn-lg">
-                        <i class="fas fa-rocket me-2"></i>Browse Test Packages
+                    <a href="{{ url_for('courses') }}" class="btn btn-success btn-lg">
+                        <i class="fas fa-rocket me-2"></i>Browse Courses
                     </a>
                     {% if not current_user.is_authenticated %}
                         <a href="{{ url_for('register') }}" class="btn btn-outline-white btn-lg">
@@ -84,7 +84,7 @@
     </section>
 
     <!-- Test Packages Preview -->
-    {% if test_packages %}
+    {% if courses %}
     <section class="mb-5">
         <div class="text-center mb-5">
             <h2 class="display-5 fw-bold text-primary">Popular Test Packages</h2>
@@ -92,7 +92,7 @@
         </div>
         
         <div class="row g-4">
-            {% for package in test_packages[:3] %}
+            {% for course in courses[:3] %}
             <div class="col-lg-4">
                 <div class="card package-card h-100">
                     <div class="card-body">
@@ -119,7 +119,7 @@
         </div>
         
         <div class="text-center mt-4">
-            <a href="{{ url_for('test_packages') }}" class="btn btn-outline-primary btn-lg">
+            <a href="{{ url_for('courses') }}" class="btn btn-outline-primary btn-lg">
                 View All Packages <i class="fas fa-arrow-right ms-2"></i>
             </a>
         </div>

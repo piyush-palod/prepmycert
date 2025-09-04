@@ -30,6 +30,42 @@ class User(UserMixin, db.Model):
     @property
     def full_name(self):
         return f"{self.first_name} {self.last_name}"
+    
+    def is_account_locked(self):
+        """Check if account is locked due to failed login attempts"""
+        from datetime import timedelta
+        
+        if not self.is_locked:
+            return False
+        
+        # Auto-unlock after 1 hour if no recent failed attempts
+        if self.last_login_attempt:
+            lockout_duration = datetime.utcnow() - self.last_login_attempt
+            if lockout_duration > timedelta(hours=1):
+                self.is_locked = False
+                self.failed_login_attempts = 0
+                db.session.commit()
+                return False
+        
+        return True
+    
+    def increment_login_attempts(self):
+        """Increment failed login attempts and lock account if threshold reached"""
+        self.failed_login_attempts += 1
+        self.last_login_attempt = datetime.utcnow()
+        
+        # Lock account after 5 failed attempts
+        if self.failed_login_attempts >= 5:
+            self.is_locked = True
+        
+        db.session.commit()
+    
+    def reset_login_attempts(self):
+        """Reset failed login attempts and unlock account"""
+        self.failed_login_attempts = 0
+        self.is_locked = False
+        self.last_login_attempt = None
+        db.session.commit()
 
 class Course(db.Model):
     __tablename__ = 'courses'
@@ -235,14 +271,113 @@ class Coupon(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def is_valid(self, user_id, amount):
+        """Check if coupon is valid for use"""
+        # Check if coupon is active
+        if not self.is_active:
+            return False, "Coupon is not active"
+        
+        # Check expiry date
+        if self.valid_until and self.valid_until < datetime.utcnow():
+            return False, "Coupon has expired"
+        
+        # Check usage limit
+        if self.usage_limit and self.used_count >= self.usage_limit:
+            return False, "Coupon usage limit exceeded"
+        
+        # Check minimum purchase amount
+        if self.minimum_purchase and amount < self.minimum_purchase:
+            return False, f"Minimum purchase amount of ${self.minimum_purchase:.2f} required"
+        
+        # Check if user has already used this coupon
+        existing_usage = CouponUsage.query.filter_by(
+            coupon_id=self.id,
+            user_id=user_id
+        ).first()
+        
+        if existing_usage:
+            return False, "You have already used this coupon"
+        
+        return True, "Coupon is valid"
+    
+    def calculate_discount(self, amount):
+        """Calculate discount amount for given purchase amount"""
+        if self.discount_type == 'percentage':
+            return min(amount * (self.discount_value / 100), amount)
+        elif self.discount_type == 'fixed':
+            return min(self.discount_value, amount)
+        return 0
+
+class CouponUsage(db.Model):
+    __tablename__ = 'coupon_usages'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    coupon_id = db.Column(db.Integer, db.ForeignKey('coupons.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    purchase_id = db.Column(db.Integer, db.ForeignKey('user_purchases.id'), nullable=False)
+    discount_amount = db.Column(db.Float, nullable=False)
+    used_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    coupon = db.relationship('Coupon', backref='usages')
+    user = db.relationship('User', backref='coupon_usages')
+    purchase = db.relationship('UserPurchase', backref='coupon_usage')
 
 class OTPToken(db.Model):
     __tablename__ = 'otp_tokens'
     
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)  # Nullable for email-only tokens
     email = db.Column(db.String(120), nullable=False, index=True)
     token = db.Column(db.String(10), nullable=False)
-    purpose = db.Column(db.String(20), nullable=False)  # 'registration', 'login', 'password_reset'
+    purpose = db.Column(db.String(20), nullable=False)  # 'registration', 'login', 'password_reset', 'verification'
     is_used = db.Column(db.Boolean, default=False)
     expires_at = db.Column(db.DateTime, nullable=False)
+    ip_address = db.Column(db.String(45), nullable=True)  # Support IPv6
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationship
+    user = db.relationship('User', backref='otp_tokens')
+    
+    def __init__(self, email=None, user_id=None, purpose='login', duration_minutes=10, ip_address=None):
+        import random
+        import string
+        from datetime import timedelta
+        
+        if user_id:
+            user = User.query.get(user_id)
+            if user:
+                self.email = user.email
+                self.user_id = user_id
+            else:
+                raise ValueError("User not found")
+        else:
+            self.email = email
+        
+        self.purpose = purpose
+        self.token = ''.join(random.choices(string.digits, k=6))  # 6-digit code
+        self.expires_at = datetime.utcnow() + timedelta(minutes=duration_minutes)
+        self.ip_address = ip_address
+    
+    def verify_token(self, provided_token):
+        """Verify the provided token and mark as used if correct"""
+        if self.is_used:
+            return False
+        if self.expires_at < datetime.utcnow():
+            return False
+        if self.token == provided_token:
+            self.is_used = True
+            db.session.commit()
+            return True
+        return False
+    
+    @staticmethod
+    def cleanup_expired_tokens():
+        """Remove expired OTP tokens"""
+        expired_tokens = OTPToken.query.filter(OTPToken.expires_at < datetime.utcnow()).all()
+        count = len(expired_tokens)
+        for token in expired_tokens:
+            db.session.delete(token)
+        db.session.commit()
+        return count

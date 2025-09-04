@@ -2,7 +2,7 @@
 from flask import render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 from app import app, db
-from models import Coupon, Bundle, BundlePackage, TestPackage, CouponUsage, UserPurchase
+from models import Coupon, Bundle, BundleCourse, Course, CouponUsage, UserPurchase
 from datetime import datetime, timedelta
 import re
 
@@ -60,8 +60,7 @@ def create_coupon():
                 discount_value=discount_value,
                 minimum_purchase=float(minimum_purchase) if minimum_purchase else None,
                 usage_limit=int(usage_limit) if usage_limit else None,
-                valid_until=datetime.strptime(valid_until, '%Y-%m-%d') if valid_until else None,
-                created_by=current_user.id
+                valid_until=datetime.strptime(valid_until, '%Y-%m-%d') if valid_until else None
             )
             
             db.session.add(coupon)
@@ -114,42 +113,41 @@ def create_bundle():
             title = request.form.get('title', '').strip()
             description = request.form.get('description', '').strip()
             price = float(request.form.get('price', 0))
-            package_ids = request.form.getlist('package_ids[]')
+            course_ids = request.form.getlist('course_ids[]')
             
             if not title or not description:
                 flash('Title and description are required.', 'error')
-                return render_template('admin/create_bundle.html', packages=TestPackage.query.filter_by(is_active=True).all())
+                return render_template('admin/create_bundle.html', courses=Course.query.filter_by(is_active=True).all())
             
-            if not package_ids or len(package_ids) < 2:
-                flash('Please select at least 2 test packages for the bundle.', 'error')
-                return render_template('admin/create_bundle.html', packages=TestPackage.query.filter_by(is_active=True).all())
+            if not course_ids or len(course_ids) < 2:
+                flash('Please select at least 2 courses for the bundle.', 'error')
+                return render_template('admin/create_bundle.html', courses=Course.query.filter_by(is_active=True).all())
             
             # Calculate original price
-            selected_packages = TestPackage.query.filter(TestPackage.id.in_(package_ids)).all()
-            original_price = sum(pkg.price for pkg in selected_packages)
+            selected_courses = Course.query.filter(Course.id.in_(course_ids)).all()
+            original_price = sum(course.price for course in selected_courses)
             
             if price >= original_price:
-                flash('Bundle price must be less than the sum of individual package prices.', 'error')
-                return render_template('admin/create_bundle.html', packages=TestPackage.query.filter_by(is_active=True).all())
+                flash('Bundle price must be less than the sum of individual course prices.', 'error')
+                return render_template('admin/create_bundle.html', courses=Course.query.filter_by(is_active=True).all())
             
             # Create bundle
             bundle = Bundle(
                 title=title,
                 description=description,
-                price=price,
-                original_price=original_price,
-                created_by=current_user.id
+                bundle_price=price,
+                original_price=original_price
             )
             db.session.add(bundle)
             db.session.flush()  # Get the bundle ID
             
-            # Add packages to bundle
-            for package_id in package_ids:
-                bundle_package = BundlePackage(
+            # Add courses to bundle
+            for course_id in course_ids:
+                bundle_course = BundleCourse(
                     bundle_id=bundle.id,
-                    test_package_id=int(package_id)
+                    course_id=int(course_id)
                 )
-                db.session.add(bundle_package)
+                db.session.add(bundle_course)
             
             db.session.commit()
             
@@ -161,8 +159,8 @@ def create_bundle():
         except Exception as e:
             flash(f'Error creating bundle: {str(e)}', 'error')
     
-    packages = TestPackage.query.filter_by(is_active=True).all()
-    return render_template('admin/create_bundle.html', packages=packages)
+    courses = Course.query.filter_by(is_active=True).all()
+    return render_template('admin/create_bundle.html', courses=courses)
 
 @app.route('/admin/toggle-bundle/<int:bundle_id>', methods=['POST'])
 @login_required

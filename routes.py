@@ -78,6 +78,12 @@ def courses():
     bundles = Bundle.query.filter_by(is_active=True).all()
     return render_template('courses.html', courses=courses, bundles=bundles)
 
+# Legacy route - redirect to courses
+@app.route('/test-packages')
+def test_packages():
+    """Legacy route - redirect to courses"""
+    return redirect(url_for('courses'))
+
 @app.route('/course/<int:course_id>')
 def course_detail(course_id):
     """Display course details and practice tests"""

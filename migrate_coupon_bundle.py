@@ -3,8 +3,8 @@
 
 import os
 from app import app, db
-from models import User, TestPackage, Question, AnswerOption, UserPurchase, TestAttempt, UserAnswer, OTPToken
-from models import Coupon, Bundle, BundlePackage, CouponUsage
+from models import User, Course, Question, AnswerOption, UserPurchase, TestAttempt, UserAnswer, OTPToken
+from models import Coupon, Bundle, BundleCourse, CouponUsage
 from sqlalchemy import text
 
 def migrate_database():
