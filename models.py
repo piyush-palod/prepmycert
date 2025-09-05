@@ -115,7 +115,7 @@ class PracticeTest(db.Model):
     
     # Relationships
     questions = db.relationship('Question', backref='practice_test', lazy=True, cascade='all, delete-orphan')
-    test_attempts = db.relationship('TestAttempt', backref='practice_test', lazy=True)
+    test_attempts = db.relationship('TestAttempt', backref='practice_test', lazy=True, cascade='all, delete-orphan')
 
     @property
     def question_count(self):

@@ -3,7 +3,7 @@ import re
 import stripe
 from flask import render_template, request, redirect, url_for, flash, session, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
-from app import app, db
+from app import app, db, csrf
 from models import User, Course, PracticeTest, Question, AnswerOption, UserPurchase, TestAttempt, UserAnswer, Bundle, Coupon
 from utils import import_questions_from_csv, validate_azure_configuration, generate_question_sample_csv
 from azure_service import azure_service
@@ -272,6 +272,7 @@ def take_test(practice_test_id):
                          test_attempt=test_attempt)
 
 @app.route('/submit-answer', methods=['POST'])
+@csrf.exempt
 @login_required
 def submit_answer():
     test_attempt_id = session.get('test_attempt_id')
@@ -313,6 +314,7 @@ def submit_answer():
     return jsonify({'success': True})
 
 @app.route('/complete-test', methods=['POST'])
+@csrf.exempt
 @login_required
 def complete_test():
     test_attempt_id = session.get('test_attempt_id')
@@ -488,7 +490,7 @@ def manage_practice_tests(course_id):
     course = Course.query.get_or_404(course_id)
     practice_tests = PracticeTest.query.filter_by(course_id=course_id).order_by(PracticeTest.order_index).all()
     
-    return render_template('admin/practice_tests.html', course=course, practice_tests=practice_tests)
+    return render_template('admin/practice_test.html', course=course, practice_tests=practice_tests)
 
 @app.route('/admin/course/<int:course_id>/create-practice-test', methods=['POST'])
 @login_required
@@ -569,6 +571,42 @@ def toggle_practice_test_status(practice_test_id):
 
     action = 'activated' if practice_test.is_active else 'deactivated'
     flash(f'Practice test "{practice_test.title}" has been {action}.', 'success')
+    return redirect(url_for('manage_practice_tests', course_id=course_id))
+
+@app.route('/admin/delete-practice-test/<int:practice_test_id>', methods=['POST'])
+@login_required
+def delete_practice_test(practice_test_id):
+    if not current_user.is_admin:
+        flash('Access denied. Admin privileges required.', 'error')
+        return redirect(url_for('dashboard'))
+
+    practice_test = PracticeTest.query.get_or_404(practice_test_id)
+    course_id = practice_test.course_id
+    test_title = practice_test.title
+
+    try:
+        # First, manually delete related test attempts to handle any data inconsistencies
+        test_attempts = TestAttempt.query.filter_by(practice_test_id=practice_test_id).all()
+        for attempt in test_attempts:
+            # Delete user answers for this test attempt
+            UserAnswer.query.filter_by(test_attempt_id=attempt.id).delete()
+            # Delete the test attempt
+            db.session.delete(attempt)
+        
+        # Delete all questions (which will cascade to delete answer options)
+        questions = Question.query.filter_by(practice_test_id=practice_test_id).all()
+        for question in questions:
+            db.session.delete(question)
+        
+        # Finally, delete the practice test itself
+        db.session.delete(practice_test)
+        db.session.commit()
+        
+        flash(f'Practice test "{test_title}" and all its questions have been deleted successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting practice test: {str(e)}', 'error')
+    
     return redirect(url_for('manage_practice_tests', course_id=course_id))
 
 @app.route('/admin/practice-test/<int:practice_test_id>/questions')

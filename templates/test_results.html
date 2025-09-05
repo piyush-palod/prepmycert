@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Test Results - PrepMyCert{% endblock %}
+{% block title %}{{ test_attempt.practice_test.title }} Results - PrepMyCert{% endblock %}
 
 {% block content %}
 <div class="container py-4">
@@ -148,8 +148,12 @@
                 <div class="card-body">
                     <div class="summary-stats">
                         <div class="stat-item">
-                            <div class="stat-label">Test Package</div>
-                            <div class="stat-value">{{ test_attempt.test_package.title }}</div>
+                            <div class="stat-label">Course</div>
+                            <div class="stat-value">{{ test_attempt.practice_test.course.title }}</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-label">Practice Test</div>
+                            <div class="stat-value">{{ test_attempt.practice_test.title }}</div>
                         </div>
                         <div class="stat-item">
                             <div class="stat-label">Completed</div>
@@ -165,7 +169,7 @@
                     </div>
                     
                     <div class="actions mt-4">
-                        <a href="{{ url_for('take_test', package_id=test_attempt.test_package.id) }}" class="btn btn-primary w-100 mb-2">
+                        <a href="{{ url_for('take_test', practice_test_id=test_attempt.practice_test.id) }}" class="btn btn-primary w-100 mb-2">
                             <i class="fas fa-redo me-2"></i>Retake Test
                         </a>
                         <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary w-100">

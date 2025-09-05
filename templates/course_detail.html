@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ package.title }} - PrepMyCert{% endblock %}
+{% block title %}{{ course.title }} - PrepMyCert{% endblock %}
 
 {% block content %}
 <div class="container py-4">
@@ -8,14 +8,15 @@
         <div class="col-lg-8">
             <div class="card">
                 <div class="card-body">
-                    <div class="package-domain">{{ package.domain }}</div>
-                    <h1 class="card-title">{{ package.title }}</h1>
-                    <p class="card-text lead">{{ package.description }}</p>
+                    <div class="package-domain">{{ course.domain }}</div>
+                    <h1 class="card-title">{{ course.title }}</h1>
+                    <p class="card-text lead">{{ course.description }}</p>
                     
                     <div class="package-features mt-4">
                         <h5>What's Included:</h5>
                         <ul class="list-unstyled">
-                            <li><i class="fas fa-check text-success me-2"></i>{{ package.question_count }} Practice Questions</li>
+                            <li><i class="fas fa-check text-success me-2"></i>{{ course.question_count }} Practice Questions</li>
+                            <li><i class="fas fa-check text-success me-2"></i>{{ practice_tests|length }} Practice Tests</li>
                             <li><i class="fas fa-check text-success me-2"></i>Detailed explanations for all answer options</li>
                             <li><i class="fas fa-check text-success me-2"></i>Unlimited test attempts</li>
                             <li><i class="fas fa-check text-success me-2"></i>Progress tracking and analytics</li>
@@ -23,6 +24,36 @@
                             <li><i class="fas fa-check text-success me-2"></i>Mobile-friendly interface</li>
                         </ul>
                     </div>
+
+                    {% if practice_tests %}
+                    <div class="practice-tests mt-4">
+                        <h5>Practice Tests:</h5>
+                        <div class="row g-3">
+                            {% for test in practice_tests %}
+                            <div class="col-12">
+                                <div class="card border-0 bg-light">
+                                    <div class="card-body py-3">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <h6 class="mb-1">{{ test.title }}</h6>
+                                                {% if test.description %}
+                                                <p class="text-muted mb-0 small">{{ test.description }}</p>
+                                                {% endif %}
+                                            </div>
+                                            <div class="text-end">
+                                                <span class="badge bg-primary">{{ test.question_count }} Questions</span>
+                                                {% if test.time_limit_minutes %}
+                                                <br><small class="text-muted">{{ test.time_limit_minutes }} min</small>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
 
                     <div class="package-benefits mt-4">
                         <h5>Why Choose This Package:</h5>
@@ -64,27 +95,45 @@
         <div class="col-lg-4">
             <div class="card sticky-top">
                 <div class="card-body text-center">
-                    <div class="package-price-large mb-3">${{ "%.2f"|format(package.price) }}</div>
+                    <div class="package-price-large mb-3">${{ "%.2f"|format(course.price) }}</div>
                     <p class="text-muted mb-3">One-time payment • Lifetime access</p>
                     
                     {% if current_user.is_authenticated %}
                         {% if has_purchased %}
                             <div class="alert alert-success">
-                                <i class="fas fa-check-circle me-2"></i>You own this package
+                                <i class="fas fa-check-circle me-2"></i>You own this course
                             </div>
-                            <a href="{{ url_for('take_test', package_id=package.id) }}" class="btn btn-success btn-lg w-100 mb-3">
-                                <i class="fas fa-play me-2"></i>Take Test
-                            </a>
+                            {% if practice_tests %}
+                                <div class="dropdown w-100 mb-3">
+                                    <button class="btn btn-success btn-lg w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                        <i class="fas fa-play me-2"></i>Take Practice Tests
+                                    </button>
+                                    <ul class="dropdown-menu w-100">
+                                        {% for test in practice_tests %}
+                                        <li><a class="dropdown-item" href="{{ url_for('take_test', practice_test_id=test.id) }}">{{ test.title }}</a></li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            {% endif %}
                         {% elif current_user.is_admin %}
                             <div class="alert alert-info">
                                 <i class="fas fa-user-shield me-2"></i>Admin Access
                             </div>
-                            <a href="{{ url_for('take_test', package_id=package.id) }}" class="btn btn-warning btn-lg w-100 mb-3">
-                                <i class="fas fa-play me-2"></i>Take Test (Admin)
-                            </a>
+                            {% if practice_tests %}
+                                <div class="dropdown w-100 mb-3">
+                                    <button class="btn btn-warning btn-lg w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                        <i class="fas fa-play me-2"></i>Take Tests (Admin)
+                                    </button>
+                                    <ul class="dropdown-menu w-100">
+                                        {% for test in practice_tests %}
+                                        <li><a class="dropdown-item" href="{{ url_for('take_test', practice_test_id=test.id) }}">{{ test.title }}</a></li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            {% endif %}
                         {% else %}
                             <form method="POST" action="{{ url_for('create_checkout_session') }}">
-                                <input type="hidden" name="package_id" value="{{ package.id }}">
+                                <input type="hidden" name="course_id" value="{{ course.id }}">
                                 <button type="submit" class="btn btn-primary btn-lg w-100 mb-3">
                                     <i class="fas fa-shopping-cart me-2"></i>Purchase Now
                                 </button>
@@ -101,11 +150,15 @@
                     
                     <div class="package-stats text-center">
                         <div class="row">
-                            <div class="col">
-                                <div class="stat-number">{{ package.question_count }}</div>
+                            <div class="col-4">
+                                <div class="stat-number">{{ course.question_count }}</div>
                                 <div class="stat-label">Questions</div>
                             </div>
-                            <div class="col">
+                            <div class="col-4">
+                                <div class="stat-number">{{ practice_tests|length }}</div>
+                                <div class="stat-label">Tests</div>
+                            </div>
+                            <div class="col-4">
                                 <div class="stat-number">∞</div>
                                 <div class="stat-label">Attempts</div>
                             </div>

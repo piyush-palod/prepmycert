@@ -16,6 +16,7 @@
                 </div>
                 <div class="card-body">
                     <form method="POST" action="{{ url_for('upload_image', package_id=package.id) }}" enctype="multipart/form-data">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <div class="mb-3">
                             <label for="image" class="form-label">Select Image File</label>
                             <input type="file" class="form-control" id="image" name="image" accept=".png,.jpg,.jpeg,.gif" required>

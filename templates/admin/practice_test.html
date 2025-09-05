@@ -153,6 +153,12 @@
                                                             {% endif %}
                                                         </button>
                                                     </li>
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li>
+                                                        <button class="dropdown-item text-danger" onclick="confirmDeletePracticeTest({{ practice_test.id }}, '{{ practice_test.title }}', {{ practice_test.question_count }})">
+                                                            <i class="fas fa-trash me-2"></i>Delete Test
+                                                        </button>
+                                                    </li>
                                                 </ul>
                                             </div>
                                         </div>
@@ -227,6 +233,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <form method="POST" action="{{ url_for('create_practice_test', course_id=course.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <div class="modal-header">
                     <h5 class="modal-title">Create New Practice Test</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -267,6 +274,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <form method="POST" id="editPracticeTestForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <div class="modal-header">
                     <h5 class="modal-title">Edit Practice Test</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -305,6 +313,40 @@
     </div>
 </div>
 
+<!-- Delete Practice Test Modal -->
+<div class="modal fade" id="deletePracticeTestModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">Delete Practice Test</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Warning:</strong> This action cannot be undone!
+                </div>
+                <p>Are you sure you want to delete the practice test <strong id="delete-test-title"></strong>?</p>
+                <p>This will permanently delete:</p>
+                <ul>
+                    <li>The practice test itself</li>
+                    <li>All <strong id="delete-question-count"></strong> questions in this test</li>
+                    <li>All user answers and test attempts for this test</li>
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deletePracticeTestForm" method="POST" style="display: inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash me-2"></i>Delete Practice Test
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 function editPracticeTest(id, title, description, timeLimit, isActive) {
     document.getElementById('editPracticeTestForm').action = `/admin/edit-practice-test/${id}`;
@@ -329,6 +371,14 @@ function togglePracticeTestStatus(practiceTestId, isCurrentlyActive) {
         document.body.appendChild(form);
         form.submit();
     }
+}
+
+function confirmDeletePracticeTest(practiceTestId, title, questionCount) {
+    document.getElementById('delete-test-title').textContent = title;
+    document.getElementById('delete-question-count').textContent = questionCount;
+    document.getElementById('deletePracticeTestForm').action = `/admin/delete-practice-test/${practiceTestId}`;
+    
+    new bootstrap.Modal(document.getElementById('deletePracticeTestModal')).show();
 }
 </script>
 {% endblock %}

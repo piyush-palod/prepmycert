@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Add Question - {{ package.title }} - PrepMyCert{% endblock %}
+{% block title %}Add Question - {{ practice_test.title }} - PrepMyCert{% endblock %}
 
 {% block content %}
 <div class="container py-4">
@@ -9,13 +9,13 @@
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <div>
                     <h1 class="h3 mb-0">Add New Question</h1>
-                    <p class="text-muted mb-0">{{ package.title }}</p>
+                    <p class="text-muted mb-0">{{ practice_test.title }}</p>
                 </div>
                 <div>
-                    <a href="{{ url_for('upload_image', package_id=package.id) }}" class="btn btn-outline-primary me-2">
+                    <a href="{{ url_for('upload_image', course_id=practice_test.course.id) }}" class="btn btn-outline-primary me-2">
                         <i class="fas fa-image me-2"></i>Upload Images
                     </a>
-                    <a href="{{ url_for('manage_questions', package_id=package.id) }}" class="btn btn-outline-secondary">
+                    <a href="{{ url_for('manage_questions', practice_test_id=practice_test.id) }}" class="btn btn-outline-secondary">
                         <i class="fas fa-arrow-left me-2"></i>Back to Questions
                     </a>
                 </div>
@@ -28,11 +28,12 @@
             <div class="card">
                 <div class="card-body">
                     <form method="POST" class="needs-validation" novalidate>
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <div class="mb-3">
                             <label for="question_text" class="form-label">Question Text</label>
                             <textarea class="form-control" id="question_text" name="question_text" rows="4" required 
                                 placeholder="Enter the question text here. You can include images using standard HTML img tags."></textarea>
-                            <div class="form-text">Use standard HTML <code>&lt;img&gt;</code> tags to include images from <code>/static/images/questions/{{ package.title|lower|replace(' ', '_')|replace('[^a-zA-Z0-9\-_]', '_', true) }}/</code></div>
+                            <div class="form-text">Use standard HTML <code>&lt;img&gt;</code> tags to include images or use the IMAGE: filename.png syntax. Images will be automatically processed during save.</div>
                             <div class="invalid-feedback">Please provide a question text.</div>
                         </div>
 
@@ -122,7 +123,7 @@
                             <button type="submit" class="btn btn-primary">
                                 <i class="fas fa-plus me-2"></i>Add Question
                             </button>
-                            <a href="{{ url_for('manage_questions', package_id=package.id) }}" class="btn btn-outline-secondary">
+                            <a href="{{ url_for('manage_questions', practice_test_id=practice_test.id) }}" class="btn btn-outline-secondary">
                                 Cancel
                             </a>
                         </div>
@@ -141,8 +142,8 @@
                 <div class="card-body">
                     <div class="mb-3">
                         <h6>Including Images</h6>
-                        <p class="small">To include images in questions or answers, use standard HTML img tags:</p>
-                        <code class="small">&lt;img src="/static/images/questions/{{ package.title|lower|replace(' ', '_')|replace('[^a-zA-Z0-9\-_]', '_', true) }}/filename.png" alt="Description"&gt;</code>
+                        <p class="small">To include images in questions or answers, use the simple IMAGE: syntax:</p>
+                        <code class="small">IMAGE: filename.png</code>
                     </div>
                     
                     <div class="mb-3">
@@ -156,19 +157,18 @@
                     </div>
                     
                     <div class="mb-3">
-                        <h6>Recommended HTML</h6>
-                        <pre class="bg-light p-2 rounded small"><code>&lt;img src="/static/images/questions/{{ package.title|lower|replace(' ', '_')|replace('[^a-zA-Z0-9\-_]', '_', true) }}/your-image.png" 
-     alt="Description" 
-     class="img-fluid" 
-     style="max-width: 100%; margin: 10px 0;"&gt;</code></pre>
+                        <h6>Usage Examples</h6>
+                        <pre class="bg-light p-2 rounded small"><code>What is shown in this diagram? IMAGE: vpc-architecture.png
+
+Or you can use HTML directly:
+&lt;img src="[Azure URL will be generated]" alt="Description" class="img-fluid"&gt;</code></pre>
                     </div>
                     
                     <div class="alert alert-info alert-sm">
                         <h6 class="small"><i class="fas fa-lightbulb me-1"></i>Example Question with Image</h6>
                         <div class="small">
                             <strong>Question:</strong><br>
-                            What type of AWS architecture is shown below?<br><br>
-                            <code>&lt;img src="/static/images/questions/{{ package.title|lower|replace(' ', '_')|replace('[^a-zA-Z0-9\-_]', '_', true) }}/vpc-architecture.png" alt="VPC Architecture" class="img-fluid"&gt;</code><br><br>
+                            What type of AWS architecture is shown below? IMAGE: vpc-architecture.png<br><br>
                             <strong>Option A:</strong> Single AZ deployment<br>
                             <strong>Option B:</strong> Multi-AZ with Load Balancer ✓
                         </div>

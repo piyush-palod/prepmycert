@@ -19,6 +19,7 @@
                 </div>
                 <div class="card-body">
                     <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <div class="mb-3">
                             <label for="question_text" class="form-label">Question Text</label>
                             <textarea class="form-control" id="question_text" name="question_text" 

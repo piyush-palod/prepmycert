@@ -13,6 +13,7 @@ try:
     import auth_routes  # OTP authentication routes
     import admin_coupon_routes  # Admin coupon and bundle routes
     import admin_email_routes  # Admin email configuration routes
+    import health_check  # Health check endpoints for monitoring
     print("✅ All route modules imported successfully")
 except ImportError as e:
     print(f"❌ Error importing routes: {e}")

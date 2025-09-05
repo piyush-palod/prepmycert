@@ -52,6 +52,7 @@
                                     <td>
                                         {% if user.id != current_user.id %}
                                             <form method="POST" action="{{ url_for('toggle_admin', user_id=user.id) }}" style="display: inline;">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                                                 {% if user.is_admin %}
                                                     <button type="submit" class="btn btn-sm btn-outline-danger" 
                                                             onclick="return confirm('Remove admin privileges from {{ user.email }}?')">

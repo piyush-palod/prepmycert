@@ -28,6 +28,7 @@
                 </div>
                 <div class="card-body">
                     <form method="POST" class="needs-validation" novalidate>
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <div class="mb-3">
                             <label for="title" class="form-label">Course Title <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" id="title" name="title" required
