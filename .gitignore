@@ -25,3 +25,6 @@ Thumbs.db
 # Logs
 *.log
 .claude
+
+# Development scripts (excluded from version control)
+dev-scripts/

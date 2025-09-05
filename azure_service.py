@@ -179,7 +179,7 @@ class AzureImageService:
         def replace_image_reference(match):
             filename = match.group(1)
             image_url = self.get_image_url_with_sas(azure_folder, filename)
-            return f'<img src="{image_url}" alt="{filename}" class="img-fluid question-image" style="max-width: 100%; height: auto; margin: 10px 0;">'
+            return f'<div class="question-image-container"><img src="{image_url}" alt="{filename}" class="img-fluid question-image" style="max-width: 100%; height: auto; display: block; margin: 15px 0; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"></div>'
         
         # Replace IMAGE: references
         processed_text = re.sub(image_pattern, replace_image_reference, text, flags=re.IGNORECASE)
@@ -205,9 +205,9 @@ class AzureImageService:
             if 'class=' not in attrs:
                 attrs += ' class="img-fluid question-image"'
             if 'style=' not in attrs:
-                attrs += ' style="max-width: 100%; height: auto; margin: 10px 0;"'
+                attrs += ' style="max-width: 100%; height: auto; display: block; margin: 15px 0; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"'
             
-            return f'<img{" " + attrs if attrs else ""} src="{new_url}">'
+            return f'<div class="question-image-container"><img{" " + attrs if attrs else ""} src="{new_url}"></div>'
         
         # Update existing img tags
         processed_text = re.sub(azure_img_pattern, update_existing_img_tags, processed_text)

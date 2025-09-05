@@ -238,3 +238,78 @@ All database operations use proper session management:
 - Ensured all database operations use proper session management
 
 These changes resolve all circular import issues, standardize the codebase on the Course-based terminology, and maintain backward compatibility while improving the overall application architecture.
+
+## Recent UI and Functionality Improvements (September 2025)
+
+### Question Management Enhancement
+
+**Add Question Form Flexibility:**
+- Modified `templates/admin/add_question.html` to support questions with only 2 answer options
+- Removed `required` attribute from options 3 and 4, making them optional
+- Added client-side JavaScript validation ensuring:
+  - Minimum of 2 answer options are provided
+  - At least one correct answer is selected from filled options
+  - Clear visual indicators showing optional vs required fields
+
+**Server-Side Validation:**
+- Enhanced `routes.py` add question functionality with comprehensive validation:
+  - Validates minimum 2 options requirement before database insertion
+  - Ensures at least one correct answer is marked among provided options
+  - Provides meaningful error messages with form re-display on validation failure
+  - Prevents creation of invalid questions that would break the testing engine
+
+### Image Display and Processing Improvements
+
+**Azure Service Image Processing:**
+- Updated `azure_service.py` `process_text_with_images()` function with enhanced formatting:
+  - Images now wrapped in styled containers with proper spacing
+  - Added visual enhancements: rounded corners, shadows, and hover effects
+  - Improved responsive behavior for different screen sizes
+  - Better separation between text content and images
+
+**CSS Styling Enhancements:**
+- Added comprehensive image styling to `static/css/style.css`:
+  - `.question-image-container` with centered layout and styled background
+  - `.question-image` with responsive sizing (min-width: 300px, max-width: 800px)
+  - Hover effects with subtle scaling and enhanced shadows
+  - Mobile-responsive breakpoints for optimal viewing on all devices
+  - Special styling for test-taking interface with theme colors
+
+**Template Consistency Fixes:**
+- Fixed `templates/test_taking.html` template variable mismatches:
+  - Updated from `question.question_text` to `question.text` for route data compatibility
+  - Changed `question.answer_options` to `question.options` for correct data structure
+  - Fixed `option.option_text` to `option.text` for proper option display
+- Ensured all question display templates use consistent variable naming
+
+### Edit Question Template Fix
+
+**Route Compatibility:**
+- Fixed `templates/admin/edit_question.html` route reference issue:
+  - Updated `url_for('manage_questions', package_id=...)` to use `practice_test_id` parameter
+  - Resolved URL building errors that caused 500 errors on question editing
+  - Maintained proper navigation flow in admin interface
+
+### Technical Implementation Details
+
+**Image Processing Pipeline:**
+1. `IMAGE: filename.png` syntax detected in question text
+2. Azure service generates SAS-enabled URLs for secure access
+3. Images wrapped in responsive containers with styling
+4. Proper fallback handling for missing or invalid images
+5. Automatic cache refresh with 30-day SAS token expiry
+
+**Form Validation Flow:**
+1. Client-side JavaScript provides immediate feedback
+2. Server-side validation ensures data integrity
+3. Comprehensive error messages guide user corrections
+4. Form state preservation on validation failures
+5. Graceful handling of edge cases and malformed data
+
+**CSS Architecture:**
+- Mobile-first responsive design approach
+- Consistent theme integration with existing color scheme
+- Performance-optimized with minimal CSS overhead
+- Cross-browser compatibility with modern web standards
+
+These improvements enhance the user experience for question management, ensure proper image display across all interfaces, and maintain data integrity through comprehensive validation while preserving the existing security and performance characteristics of the application.

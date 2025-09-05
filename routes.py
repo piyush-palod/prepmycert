@@ -658,26 +658,50 @@ def add_question(practice_test_id):
         db.session.add(question)
         db.session.flush()
 
-        # Add answer options
+        # Validate and add answer options
         option_count = int(request.form.get('option_count', 4))
+        valid_options = []
+        has_correct_answer = False
+        
+        # First, collect valid options
         for i in range(1, option_count + 1):
             option_text = request.form.get(f'option_text_{i}')
             option_explanation = request.form.get(f'option_explanation_{i}')
             option_correct = request.form.get(f'option_correct_{i}') == 'on'
 
-            if option_text:
-                # Process option text with Azure images
-                processed_option_text = azure_service.process_text_with_images(option_text.strip(), course.azure_folder)
-                processed_option_explanation = azure_service.process_text_with_images(option_explanation.strip(), course.azure_folder) if option_explanation else ''
+            if option_text and option_text.strip():
+                valid_options.append({
+                    'text': option_text.strip(),
+                    'explanation': option_explanation.strip() if option_explanation else '',
+                    'is_correct': option_correct,
+                    'order': i
+                })
+                if option_correct:
+                    has_correct_answer = True
+        
+        # Validate minimum requirements
+        if len(valid_options) < 2:
+            flash('Please provide at least 2 answer options.', 'error')
+            return render_template('admin/add_question.html', practice_test=practice_test)
+        
+        if not has_correct_answer:
+            flash('Please select at least one correct answer.', 'error')
+            return render_template('admin/add_question.html', practice_test=practice_test)
+        
+        # Add valid options to the database
+        for option_data in valid_options:
+            # Process option text with Azure images
+            processed_option_text = azure_service.process_text_with_images(option_data['text'], course.azure_folder)
+            processed_option_explanation = azure_service.process_text_with_images(option_data['explanation'], course.azure_folder) if option_data['explanation'] else ''
 
-                option = AnswerOption(
-                    question_id=question.id,
-                    option_text=processed_option_text,
-                    explanation=processed_option_explanation,
-                    is_correct=option_correct,
-                    option_order=i
-                )
-                db.session.add(option)
+            option = AnswerOption(
+                question_id=question.id,
+                option_text=processed_option_text,
+                explanation=processed_option_explanation,
+                is_correct=option_data['is_correct'],
+                option_order=option_data['order']
+            )
+            db.session.add(option)
 
         db.session.commit()
         flash('Question added successfully!', 'success')

@@ -437,3 +437,64 @@
 ::-webkit-scrollbar-thumb:hover {
     background: var(--primary-dark);
 }
+
+/* Question Image Styles */
+.question-image-container {
+    text-align: center;
+    margin: 20px 0;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.question-image {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+    border-radius: 5px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    border: 2px solid #fff;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.question-image:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+/* Responsive image sizes */
+@media (max-width: 768px) {
+    .question-image-container {
+        padding: 5px;
+        margin: 15px 0;
+    }
+    
+    .question-image {
+        max-width: 100%;
+        border-radius: 3px;
+    }
+}
+
+/* Question text with images */
+.question-text {
+    line-height: 1.6;
+}
+
+.question-text .question-image-container {
+    margin: 15px auto;
+}
+
+/* Answer option text with images */
+.form-check-label .question-image-container {
+    margin: 10px 0;
+    display: inline-block;
+    width: 100%;
+}
+
+.form-check-label .question-image {
+    max-width: 200px;
+    max-height: 150px;
+    object-fit: contain;
+}
