@@ -40,10 +40,17 @@
                         <div class="mb-3">
                             <label for="question_type" class="form-label">Question Type</label>
                             <select class="form-select" id="question_type" name="question_type" required>
-                                <option value="multiple-choice">Multiple Choice</option>
+                                <option value="multiple-choice">Multiple Choice (Single Answer)</option>
+                                <option value="multiple-select">Multiple Select (Multiple Answers)</option>
                                 <option value="true-false">True/False</option>
                                 <option value="fill-blank">Fill in the Blank</option>
                             </select>
+                            <div class="form-text">
+                                <span id="question-type-help-multiple-choice">Students can select only one correct answer from the options.</span>
+                                <span id="question-type-help-multiple-select" style="display:none;">Students can select multiple correct answers. Check all options that are correct.</span>
+                                <span id="question-type-help-true-false" style="display:none;">Simple true or false question with two options.</span>
+                                <span id="question-type-help-fill-blank" style="display:none;">Students need to fill in the blank or provide a text answer.</span>
+                            </div>
                         </div>
 
                         <div class="mb-3">
@@ -197,15 +204,36 @@ Or you can use HTML directly:
 </div>
 
 <script>
+// Question type help text management
+function updateQuestionTypeHelp() {
+    const questionType = document.getElementById('question_type').value;
+    
+    // Hide all help texts
+    document.querySelectorAll('[id^="question-type-help-"]').forEach(el => {
+        el.style.display = 'none';
+    });
+    
+    // Show relevant help text
+    const helpElement = document.getElementById(`question-type-help-${questionType}`);
+    if (helpElement) {
+        helpElement.style.display = 'inline';
+    }
+}
+
 // Form validation
 (function() {
     'use strict';
     window.addEventListener('load', function() {
+        // Set up question type change listener
+        document.getElementById('question_type').addEventListener('change', updateQuestionTypeHelp);
+        updateQuestionTypeHelp(); // Initialize
+        
         var forms = document.getElementsByClassName('needs-validation');
         var validation = Array.prototype.filter.call(forms, function(form) {
             form.addEventListener('submit', function(event) {
                 var isValid = true;
                 var errorMessage = '';
+                var questionType = document.getElementById('question_type').value;
                 
                 // Check if at least 2 options are filled
                 var filledOptions = 0;
@@ -216,26 +244,38 @@ Or you can use HTML directly:
                     }
                 }
                 
-                if (filledOptions < 2) {
+                if (filledOptions < 2 && (questionType === 'multiple-choice' || questionType === 'multiple-select')) {
                     isValid = false;
                     errorMessage = 'Please provide at least 2 answer options.';
                 }
                 
                 // Check if at least one correct answer is selected
                 var hasCorrectAnswer = false;
+                var correctAnswerCount = 0;
                 for (var i = 1; i <= 4; i++) {
                     var checkbox = document.querySelector(`input[name="option_correct_${i}"]`);
                     var optionText = document.querySelector(`textarea[name="option_text_${i}"]`).value.trim();
                     if (checkbox.checked && optionText) {
                         hasCorrectAnswer = true;
-                        break;
+                        correctAnswerCount++;
                     }
                 }
                 
-                if (!hasCorrectAnswer) {
+                if (!hasCorrectAnswer && (questionType === 'multiple-choice' || questionType === 'multiple-select')) {
                     isValid = false;
                     if (errorMessage) errorMessage += ' ';
                     errorMessage += 'Please select at least one correct answer from the filled options.';
+                }
+                
+                // For multiple-choice, warn if more than one correct answer is selected
+                if (questionType === 'multiple-choice' && correctAnswerCount > 1) {
+                    if (confirm('You selected multiple correct answers for a "Multiple Choice (Single Answer)" question. This means students can only select one answer but multiple will be marked as correct. Did you mean to use "Multiple Select" instead?')) {
+                        // User confirmed, allow submission
+                    } else {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        return;
+                    }
                 }
                 
                 // Show custom validation errors

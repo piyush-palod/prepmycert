@@ -79,31 +79,44 @@
                     </h5>
                 </div>
                 <div class="card-body">
-                    {% for user_answer, question, selected_option in user_answers %}
+                    {% for result in question_results %}
                     <div class="question-review mb-4">
                         <div class="question-header">
                             <h6>
-                                <span class="badge bg-{{ 'success' if user_answer.is_correct else 'danger' }} me-2">
+                                <span class="badge bg-{{ 'success' if result.is_correct else 'warning' if result.is_partial else 'danger' }} me-2">
                                     {{ loop.index }}
                                 </span>
-                                {{ question.question_text|safe }}
+                                {{ result.question.question_text|safe }}
+                                {% if result.is_partial %}
+                                    <small class="text-warning">(Partial Credit: {{ "%.1f"|format(result.score * 100) }}%)</small>
+                                {% endif %}
                             </h6>
-                            <small class="text-muted">Domain: {{ question.domain }}</small>
+                            <small class="text-muted">
+                                Domain: {{ result.question.domain }} | 
+                                Type: {{ result.question.question_type|title|replace('-', ' ') }}
+                            </small>
                         </div>
                         
                         <div class="answer-review mt-3">
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="answer-section">
-                                        <h6 class="text-{{ 'success' if user_answer.is_correct else 'danger' }}">
-                                            <i class="fas fa-{{ 'check' if user_answer.is_correct else 'times' }} me-2"></i>
-                                            Your Answer
+                                        <h6 class="text-{{ 'success' if result.is_correct else 'warning' if result.is_partial else 'danger' }}">
+                                            <i class="fas fa-{{ 'check' if result.is_correct else 'check-circle' if result.is_partial else 'times' }} me-2"></i>
+                                            Your Answer{{ 's' if result.selected_options|length > 1 else '' }}
                                         </h6>
-                                        {% if selected_option %}
-                                            <p class="answer-text">{{ selected_option.option_text|safe }}</p>
-                                            {% if selected_option.explanation %}
-                                                <p class="explanation text-muted">{{ selected_option.explanation|safe }}</p>
-                                            {% endif %}
+                                        {% if result.selected_options %}
+                                            {% for selection in result.selected_options %}
+                                                <div class="selected-answer mb-2">
+                                                    <span class="badge bg-{{ 'success' if selection.is_user_correct else 'danger' }} me-2">
+                                                        <i class="fas fa-{{ 'check' if selection.is_user_correct else 'times' }}"></i>
+                                                    </span>
+                                                    <span class="answer-text">{{ selection.option.option_text|safe }}</span>
+                                                    {% if selection.option.explanation %}
+                                                        <div class="explanation text-muted mt-1 ms-4">{{ selection.option.explanation|safe }}</div>
+                                                    {% endif %}
+                                                </div>
+                                            {% endfor %}
                                         {% else %}
                                             <p class="text-muted">No answer selected</p>
                                         {% endif %}
@@ -113,22 +126,27 @@
                                     <div class="answer-section">
                                         <h6 class="text-success">
                                             <i class="fas fa-check me-2"></i>
-                                            Correct Answer
+                                            Correct Answer{{ 's' if result.question.answer_options|selectattr('is_correct')|list|length > 1 else '' }}
                                         </h6>
-                                        {% for option in question.answer_options if option.is_correct %}
-                                            <p class="answer-text">{{ option.option_text|safe }}</p>
-                                            {% if option.explanation %}
-                                                <p class="explanation text-muted">{{ option.explanation|safe }}</p>
-                                            {% endif %}
+                                        {% for option in result.question.answer_options if option.is_correct %}
+                                            <div class="correct-answer mb-2">
+                                                <span class="badge bg-success me-2">
+                                                    <i class="fas fa-check"></i>
+                                                </span>
+                                                <span class="answer-text">{{ option.option_text|safe }}</span>
+                                                {% if option.explanation %}
+                                                    <div class="explanation text-muted mt-1 ms-4">{{ option.explanation|safe }}</div>
+                                                {% endif %}
+                                            </div>
                                         {% endfor %}
                                     </div>
                                 </div>
                             </div>
                             
-                            {% if question.overall_explanation %}
+                            {% if result.question.overall_explanation %}
                                 <div class="overall-explanation mt-3">
                                     <h6>Overall Explanation</h6>
-                                    <p class="text-muted">{{ question.overall_explanation|safe }}</p>
+                                    <p class="text-muted">{{ result.question.overall_explanation|safe }}</p>
                                 </div>
                             {% endif %}
                         </div>

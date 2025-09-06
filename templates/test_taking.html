@@ -32,15 +32,35 @@
                             </div>
                             
                             <div class="answer-options mt-4">
-                                {% for option in question.options %}
-                                <div class="form-check answer-option">
-                                    <input class="form-check-input" type="radio" name="question_{{ question.id }}" 
-                                           id="option_{{ option.id }}" value="{{ option.id }}">
-                                    <label class="form-check-label" for="option_{{ option.id }}">
-                                        {{ option.text|safe }}
-                                    </label>
-                                </div>
-                                {% endfor %}
+                                {% if question.type == 'multiple-select' %}
+                                    <!-- Multiple Select: Use checkboxes -->
+                                    {% for option in question.options %}
+                                    <div class="form-check answer-option">
+                                        <input class="form-check-input" type="checkbox" name="question_{{ question.id }}" 
+                                               id="option_{{ option.id }}" value="{{ option.id }}">
+                                        <label class="form-check-label" for="option_{{ option.id }}">
+                                            {{ option.text|safe }}
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                    <small class="text-info mt-2">
+                                        <i class="fas fa-info-circle"></i> Select all correct answers (multiple selections allowed)
+                                    </small>
+                                {% else %}
+                                    <!-- Multiple Choice: Use radio buttons -->
+                                    {% for option in question.options %}
+                                    <div class="form-check answer-option">
+                                        <input class="form-check-input" type="radio" name="question_{{ question.id }}" 
+                                               id="option_{{ option.id }}" value="{{ option.id }}">
+                                        <label class="form-check-label" for="option_{{ option.id }}">
+                                            {{ option.text|safe }}
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                    <small class="text-info mt-2">
+                                        <i class="fas fa-info-circle"></i> Select one answer
+                                    </small>
+                                {% endif %}
                             </div>
                         </div>
                         {% endfor %}
@@ -168,23 +188,58 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Answer selection
     document.addEventListener('change', (e) => {
-        if (e.target.type === 'radio') {
+        if (e.target.type === 'radio' || e.target.type === 'checkbox') {
             const questionId = e.target.name.replace('question_', '');
             const optionId = e.target.value;
             
-            testData.answers[questionId] = optionId;
-            
-            // Save answer
-            fetch('/submit-answer', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    question_id: questionId,
-                    selected_option_id: optionId
-                })
-            });
+            if (e.target.type === 'radio') {
+                // Single selection - replace answer
+                testData.answers[questionId] = optionId;
+                
+                // Save single answer
+                fetch('/submit-answer', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        question_id: questionId,
+                        selected_option_id: optionId
+                    })
+                });
+            } else if (e.target.type === 'checkbox') {
+                // Multiple selection - manage array of answers
+                if (!testData.answers[questionId]) {
+                    testData.answers[questionId] = [];
+                }
+                
+                if (e.target.checked) {
+                    // Add to selection if not already present
+                    if (!testData.answers[questionId].includes(optionId)) {
+                        testData.answers[questionId].push(optionId);
+                    }
+                } else {
+                    // Remove from selection
+                    testData.answers[questionId] = testData.answers[questionId].filter(id => id !== optionId);
+                    
+                    // Clean up empty array
+                    if (testData.answers[questionId].length === 0) {
+                        delete testData.answers[questionId];
+                    }
+                }
+                
+                // Save multiple answers
+                fetch('/submit-answer', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        question_id: questionId,
+                        selected_option_ids: testData.answers[questionId] || []
+                    })
+                });
+            }
             
             updateNavButtons();
         }
@@ -198,6 +253,21 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     document.getElementById('confirm-submit').addEventListener('click', () => {
+        const confirmBtn = document.getElementById('confirm-submit');
+        const modal = bootstrap.Modal.getInstance(document.getElementById('submitModal'));
+        
+        // Prevent multiple clicks and show loading state
+        if (confirmBtn.disabled) {
+            return;
+        }
+        
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Processing...';
+        
+        // Close modal and show page-level loading
+        modal.hide();
+        showTestSubmissionLoading();
+        
         fetch('/complete-test', {
             method: 'POST',
             headers: {
@@ -205,8 +275,21 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }).then(response => {
             if (response.ok) {
+                // Let the redirect happen naturally
                 window.location.href = response.url;
+            } else {
+                // Handle error case
+                hideTestSubmissionLoading();
+                confirmBtn.disabled = false;
+                confirmBtn.innerHTML = 'Submit Test';
+                alert('Error submitting test. Please try again.');
             }
+        }).catch(error => {
+            // Handle network error
+            hideTestSubmissionLoading();
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = 'Submit Test';
+            alert('Network error. Please check your connection and try again.');
         });
     });
     
@@ -249,6 +332,53 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 btn.classList.add('btn-outline-secondary');
             }
+        });
+    }
+    
+    // Loading state functions
+    function showTestSubmissionLoading() {
+        // Create overlay
+        const overlay = document.createElement('div');
+        overlay.id = 'submission-loading-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            flex-direction: column;
+        `;
+        
+        overlay.innerHTML = `
+            <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status">
+                <span class="visually-hidden">Processing...</span>
+            </div>
+            <h5 class="text-primary">Processing Your Test...</h5>
+            <p class="text-muted">Please wait while we calculate your results.</p>
+        `;
+        
+        document.body.appendChild(overlay);
+        
+        // Disable all interactive elements
+        document.querySelectorAll('button, input, select, textarea').forEach(el => {
+            el.disabled = true;
+        });
+    }
+    
+    function hideTestSubmissionLoading() {
+        const overlay = document.getElementById('submission-loading-overlay');
+        if (overlay) {
+            overlay.remove();
+        }
+        
+        // Re-enable interactive elements
+        document.querySelectorAll('button, input, select, textarea').forEach(el => {
+            el.disabled = false;
         });
     }
 });

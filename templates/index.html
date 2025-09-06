@@ -96,19 +96,19 @@
             <div class="col-lg-4">
                 <div class="card package-card h-100">
                     <div class="card-body">
-                        <div class="package-domain">{{ package.domain }}</div>
-                        <h5 class="card-title">{{ package.title }}</h5>
-                        <p class="card-text">{{ package.description[:100] }}...</p>
+                        <div class="package-domain">{{ course.domain }}</div>
+                        <h5 class="card-title">{{ course.title }}</h5>
+                        <p class="card-text">{{ course.description[:100] }}...</p>
                         <div class="package-stats">
                             <small class="text-muted">
-                                <i class="fas fa-question-circle me-1"></i>{{ package.question_count }} Questions
+                                <i class="fas fa-question-circle me-1"></i>{{ course.question_count }} Questions
                             </small>
                         </div>
                     </div>
                     <div class="card-footer">
                         <div class="d-flex justify-content-between align-items-center">
-                            <div class="package-price">${{ "%.2f"|format(package.price) }}</div>
-                            <a href="{{ url_for('package_detail', package_id=package.id) }}" class="btn btn-primary">
+                            <div class="package-price">${{ "%.2f"|format(course.price) }}</div>
+                            <a href="{{ url_for('course_detail', course_id=course.id) }}" class="btn btn-primary">
                                 Learn More
                             </a>
                         </div>

@@ -280,38 +280,252 @@ def submit_answer():
         return jsonify({'error': 'No active test session'}), 400
 
     question_id = request.json.get('question_id')
-    selected_option_id = request.json.get('selected_option_id')
+    selected_option_id = request.json.get('selected_option_id')  # For single selection
+    selected_option_ids = request.json.get('selected_option_ids')  # For multiple selection
 
     test_attempt = TestAttempt.query.get(test_attempt_id)
     if not test_attempt or test_attempt.user_id != current_user.id:
         return jsonify({'error': 'Invalid test attempt'}), 400
 
-    # Check if answer already exists
-    existing_answer = UserAnswer.query.filter_by(
+    # Get the question to check its type
+    question = Question.query.get(question_id)
+    if not question:
+        return jsonify({'error': 'Invalid question'}), 400
+
+    # Clear existing answers for this question
+    UserAnswer.query.filter_by(
         test_attempt_id=test_attempt_id,
         question_id=question_id
-    ).first()
+    ).delete()
 
-    if existing_answer:
-        # Update existing answer
-        existing_answer.selected_option_id = selected_option_id
+    # Handle different question types
+    if question.question_type == 'multiple-select' and selected_option_ids is not None:
+        # Multiple selection question
+        for option_id in selected_option_ids:
+            selected_option = AnswerOption.query.get(option_id)
+            if selected_option and selected_option.question_id == int(question_id):
+                user_answer = UserAnswer(
+                    test_attempt_id=test_attempt_id,
+                    question_id=question_id,
+                    selected_option_id=option_id,
+                    is_correct=selected_option.is_correct,
+                    answered_at=datetime.utcnow()
+                )
+                db.session.add(user_answer)
+    elif selected_option_id is not None:
+        # Single selection question (multiple-choice, true-false, etc.)
         selected_option = AnswerOption.query.get(selected_option_id)
-        existing_answer.is_correct = selected_option.is_correct if selected_option else False
-        existing_answer.answered_at = datetime.utcnow()
-    else:
-        # Create new answer
-        selected_option = AnswerOption.query.get(selected_option_id)
-        user_answer = UserAnswer(
-            test_attempt_id=test_attempt_id,
-            question_id=question_id,
-            selected_option_id=selected_option_id,
-            is_correct=selected_option.is_correct if selected_option else False
-        )
-        db.session.add(user_answer)
+        if selected_option and selected_option.question_id == int(question_id):
+            user_answer = UserAnswer(
+                test_attempt_id=test_attempt_id,
+                question_id=question_id,
+                selected_option_id=selected_option_id,
+                is_correct=selected_option.is_correct,
+                answered_at=datetime.utcnow()
+            )
+            db.session.add(user_answer)
 
     db.session.commit()
-
     return jsonify({'success': True})
+
+def calculate_test_score_optimized(test_attempt_id, practice_test_id):
+    """
+    Optimized scoring function that calculates entire test score with minimal database queries.
+    Replaces the N+1 query problem with bulk operations.
+    
+    Returns:
+        tuple: (total_score, total_questions)
+    """
+    # Single query to get all questions with their types
+    questions = db.session.query(Question.id, Question.question_type)\
+        .filter_by(practice_test_id=practice_test_id)\
+        .all()
+    
+    if not questions:
+        return 0.0, 0
+    
+    question_ids = [q.id for q in questions]
+    question_types = {q.id: q.question_type for q in questions}
+    
+    # Single query to get all correct options for all questions
+    correct_options = db.session.query(AnswerOption.question_id, AnswerOption.id)\
+        .filter(AnswerOption.question_id.in_(question_ids), AnswerOption.is_correct == True)\
+        .all()
+    
+    # Group correct options by question
+    correct_options_by_question = {}
+    for question_id, option_id in correct_options:
+        if question_id not in correct_options_by_question:
+            correct_options_by_question[question_id] = set()
+        correct_options_by_question[question_id].add(option_id)
+    
+    # Single query to get all user answers for this test
+    user_answers = db.session.query(UserAnswer.question_id, UserAnswer.selected_option_id, UserAnswer.is_correct)\
+        .filter_by(test_attempt_id=test_attempt_id)\
+        .all()
+    
+    # Group user answers by question
+    user_answers_by_question = {}
+    for question_id, option_id, is_correct in user_answers:
+        if question_id not in user_answers_by_question:
+            user_answers_by_question[question_id] = []
+        user_answers_by_question[question_id].append({
+            'option_id': option_id,
+            'is_correct': is_correct
+        })
+    
+    # Calculate scores for each question
+    total_score = 0.0
+    for question_id, question_type in question_types.items():
+        question_score = calculate_single_question_score_optimized(
+            question_id, 
+            question_type, 
+            correct_options_by_question.get(question_id, set()),
+            user_answers_by_question.get(question_id, [])
+        )
+        total_score += question_score
+    
+    return total_score, len(questions)
+
+def calculate_single_question_score_optimized(question_id, question_type, correct_option_ids, user_answers):
+    """
+    Calculate score for a single question using pre-fetched data.
+    No database queries - all data passed as parameters.
+    """
+    if question_type == 'multiple-select':
+        # Multi-select scoring with partial credit
+        if not correct_option_ids:
+            return 1.0  # Give full credit if no correct answers defined
+        
+        selected_option_ids = {answer['option_id'] for answer in user_answers}
+        
+        # Calculate partial credit
+        correct_selections = len(selected_option_ids.intersection(correct_option_ids))
+        incorrect_selections = len(selected_option_ids - correct_option_ids)
+        
+        # Scoring formula: (correct_selections - incorrect_selections) / total_correct
+        raw_score = correct_selections - incorrect_selections
+        max_possible = len(correct_option_ids)
+        
+        score = max(0, raw_score / max_possible)
+        return min(1.0, score)
+    
+    else:
+        # Single-answer questions (multiple-choice, true-false, etc.)
+        if user_answers and user_answers[0]['is_correct']:
+            return 1.0
+        return 0.0
+
+def calculate_question_score(question, test_attempt_id):
+    """
+    Legacy function - kept for backward compatibility.
+    Calculate score for a single question supporting different question types:
+    - multiple-choice: 1 point for correct single answer, 0 for incorrect
+    - multiple-select: Partial credit based on correct selections
+    """
+    if question.question_type == 'multiple-select':
+        # For multi-select questions, use partial credit scoring
+        
+        # Get all correct options for this question
+        correct_options = AnswerOption.query.filter_by(
+            question_id=question.id, 
+            is_correct=True
+        ).all()
+        correct_option_ids = {opt.id for opt in correct_options}
+        
+        # Get user's selected options
+        user_answers = UserAnswer.query.filter_by(
+            test_attempt_id=test_attempt_id,
+            question_id=question.id
+        ).all()
+        selected_option_ids = {answer.selected_option_id for answer in user_answers}
+        
+        if not correct_option_ids:  # No correct answers defined
+            return 1.0  # Give full credit
+        
+        # Calculate partial credit
+        correct_selections = len(selected_option_ids.intersection(correct_option_ids))
+        incorrect_selections = len(selected_option_ids - correct_option_ids)
+        missed_correct = len(correct_option_ids - selected_option_ids)
+        
+        # Scoring formula: (correct_selections - incorrect_selections) / total_correct
+        # Minimum score is 0, maximum is 1
+        raw_score = correct_selections - incorrect_selections
+        max_possible = len(correct_option_ids)
+        
+        score = max(0, raw_score / max_possible)
+        return min(1.0, score)
+    
+    else:
+        # For single-answer questions (multiple-choice, true-false, etc.)
+        user_answer = UserAnswer.query.filter_by(
+            test_attempt_id=test_attempt_id,
+            question_id=question.id
+        ).first()
+        
+        return 1.0 if (user_answer and user_answer.is_correct) else 0.0
+
+def get_test_results_optimized(test_attempt_id, practice_test_id):
+    """
+    Optimized function to get test results with minimal database queries.
+    Replaces multiple individual queries with bulk operations using joins.
+    """
+    # Get all questions for this test with their options in a single query
+    questions_query = db.session.query(Question)\
+        .filter_by(practice_test_id=practice_test_id)\
+        .options(db.joinedload(Question.answer_options))\
+        .order_by(Question.order_index)\
+        .all()
+    
+    # Get all user answers for this test attempt in a single query
+    user_answers_query = db.session.query(UserAnswer)\
+        .filter_by(test_attempt_id=test_attempt_id)\
+        .options(db.joinedload(UserAnswer.selected_option))\
+        .all()
+    
+    # Group user answers by question_id for quick lookup
+    user_answers_by_question = {}
+    for answer in user_answers_query:
+        if answer.question_id not in user_answers_by_question:
+            user_answers_by_question[answer.question_id] = []
+        user_answers_by_question[answer.question_id].append(answer)
+    
+    # Build results for each question
+    question_results = []
+    for question in questions_query:
+        user_answers_for_question = user_answers_by_question.get(question.id, [])
+        
+        # Get selected options with correctness info
+        selected_options = []
+        for answer in user_answers_for_question:
+            if answer.selected_option:
+                selected_options.append({
+                    'option': answer.selected_option,
+                    'is_user_correct': answer.is_correct
+                })
+        
+        # Calculate question score using optimized method
+        correct_options = {opt.id for opt in question.answer_options if opt.is_correct}
+        user_answers_data = [{'option_id': ans.selected_option_id, 'is_correct': ans.is_correct} 
+                           for ans in user_answers_for_question]
+        
+        question_score = calculate_single_question_score_optimized(
+            question.id,
+            question.question_type,
+            correct_options,
+            user_answers_data
+        )
+        
+        question_results.append({
+            'question': question,
+            'selected_options': selected_options,
+            'all_options': question.answer_options,  # Already loaded via joinedload
+            'score': question_score,
+            'is_correct': question_score == 1.0,
+            'is_partial': 0 < question_score < 1.0
+        })
+    
+    return question_results
 
 @app.route('/complete-test', methods=['POST'])
 @csrf.exempt
@@ -325,14 +539,12 @@ def complete_test():
     if not test_attempt or test_attempt.user_id != current_user.id:
         return jsonify({'error': 'Invalid test attempt'}), 400
 
-    # Calculate score
-    correct_answers = UserAnswer.query.filter_by(
-        test_attempt_id=test_attempt_id,
-        is_correct=True
-    ).count()
-
-    total_questions = test_attempt.total_questions
-    score = (correct_answers / total_questions) * 100 if total_questions > 0 else 0
+    # Optimized scoring with bulk queries instead of N+1 problem
+    total_score, total_questions = calculate_test_score_optimized(test_attempt_id, test_attempt.practice_test_id)
+    
+    # Calculate percentage
+    score = (total_score / total_questions) * 100 if total_questions > 0 else 0
+    correct_answers = int(total_score)  # For backward compatibility
 
     # Calculate time taken
     time_taken = int((datetime.utcnow() - test_attempt.start_time).total_seconds())
@@ -361,18 +573,12 @@ def test_results(attempt_id):
         flash('You can only view your own test results.', 'error')
         return redirect(url_for('dashboard'))
 
-    # Get user answers with question details (no need for image processing - already stored)
-    user_answers = db.session.query(UserAnswer, Question, AnswerOption).join(
-        Question, UserAnswer.question_id == Question.id
-    ).outerjoin(
-        AnswerOption, UserAnswer.selected_option_id == AnswerOption.id
-    ).filter(
-        UserAnswer.test_attempt_id == attempt_id
-    ).all()
+    # Optimized: Use a single query with joins to get all needed data
+    question_results = get_test_results_optimized(attempt_id, test_attempt.practice_test_id)
 
     return render_template('test_results.html', 
                          test_attempt=test_attempt,
-                         user_answers=user_answers)
+                         question_results=question_results)
 
 # ===============================
 # ADMIN ROUTES - COURSE MANAGEMENT

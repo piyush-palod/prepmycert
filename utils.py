@@ -8,11 +8,55 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+def normalize_question_type(question_type):
+    """
+    Normalize question type variations to standard format
+    """
+    if not question_type:
+        return 'multiple-choice'  # default
+    
+    type_lower = str(question_type).lower().strip()
+    
+    # Mapping of variations to standard types
+    type_mappings = {
+        'multi-select': 'multiple-select',
+        'multiselect': 'multiple-select',
+        'multiple-selection': 'multiple-select',
+        'multi-choice': 'multiple-choice',
+        'multichoice': 'multiple-choice',
+        'single-choice': 'multiple-choice',
+        'single-select': 'multiple-choice',
+        'true-false': 'true-false',
+        'truefalse': 'true-false',
+        't/f': 'true-false',
+        'boolean': 'true-false',
+        'fill-blank': 'fill-blank',
+        'fill-in-blank': 'fill-blank',
+        'fillblank': 'fill-blank',
+        'text-input': 'fill-blank'
+    }
+    
+    # Check if it's already a standard type
+    standard_types = ['multiple-choice', 'multiple-select', 'true-false', 'fill-blank']
+    if type_lower in standard_types:
+        return type_lower
+    
+    # Try to find a mapping
+    normalized = type_mappings.get(type_lower)
+    if normalized:
+        return normalized
+    
+    # If no mapping found, log warning and default to multiple-choice
+    logger.warning(f"Unknown question type '{question_type}', defaulting to 'multiple-choice'. Supported types: {', '.join(standard_types)}")
+    return 'multiple-choice'
+
 def import_questions_from_csv(file, practice_test_id):
     """
     Import questions from CSV file format for the new Course → Practice Test → Question structure.
     Expected columns: Question, Question Type, Answer Option 1-6, Explanation 1-6, 
     Correct Answers, Overall Explanation, Domain
+    
+    Supported Question Types: multiple-choice, multiple-select, true-false, fill-blank
     """
     try:
         # Read CSV file
@@ -33,7 +77,8 @@ def import_questions_from_csv(file, practice_test_id):
         for index, row in df.iterrows():
             try:
                 question_text = row['Question']
-                question_type = row.get('Question Type', 'multiple-choice')
+                raw_question_type = row.get('Question Type', 'multiple-choice')
+                question_type = normalize_question_type(raw_question_type)
                 domain = row.get('Domain', 'General')
                 overall_explanation = row.get('Overall Explanation', '')
                 correct_answers = row.get('Correct Answers', '')
@@ -74,6 +119,13 @@ def import_questions_from_csv(file, practice_test_id):
                     # Handle different formats: "1", "1,3", "1 3", etc.
                     correct_answer_nums = re.findall(r'\d+', str(correct_answers))
                     correct_answer_nums = [int(num) for num in correct_answer_nums]
+                
+                # Validate question type and correct answers compatibility
+                if question_type == 'multiple-choice' and len(correct_answer_nums) > 1:
+                    logger.warning(f"Row {index + 1}: Multiple correct answers ({correct_answer_nums}) found for 'multiple-choice' question. Consider using 'multiple-select' type instead.")
+                
+                if question_type == 'multiple-select' and len(correct_answer_nums) <= 1:
+                    logger.info(f"Row {index + 1}: Only one correct answer found for 'multiple-select' question. This is valid but consider if 'multiple-choice' would be more appropriate.")
                 
                 # Add answer options
                 for i in range(1, 7):  # Up to 6 options
@@ -191,6 +243,25 @@ def generate_question_sample_csv():
             'Correct Answers': '2',
             'Overall Explanation': 'Form Recognizer uses advanced machine learning to extract text, key-value pairs, selection marks, and table data from documents.',
             'Domain': 'Document Intelligence'
+        },
+        {
+            'Question': 'Which Azure security features should you implement to protect against data breaches? Select all that apply.',
+            'Question Type': 'multiple-select',
+            'Answer Option 1': 'Azure Key Vault for secrets management',
+            'Answer Option 2': 'Azure Security Center for threat protection',
+            'Answer Option 3': 'Azure Active Directory for identity management',
+            'Answer Option 4': 'Azure Storage for data backup',
+            'Answer Option 5': 'Azure Monitor for logging and alerting',
+            'Answer Option 6': '',
+            'Explanation 1': 'Correct! Azure Key Vault helps protect cryptographic keys and secrets used by cloud applications and services.',
+            'Explanation 2': 'Correct! Azure Security Center provides unified security management and advanced threat protection.',
+            'Explanation 3': 'Correct! Azure AD provides identity and access management to help secure your resources.',
+            'Explanation 4': 'While important for business continuity, Azure Storage alone does not protect against data breaches.',
+            'Explanation 5': 'Correct! Azure Monitor helps detect and respond to security incidents through comprehensive logging and alerting.',
+            'Explanation 6': '',
+            'Correct Answers': '1,2,3,5',
+            'Overall Explanation': 'A comprehensive security strategy requires multiple layers: identity management (Azure AD), secrets protection (Key Vault), threat detection (Security Center), and monitoring (Azure Monitor). Storage is primarily for availability, not breach prevention.',
+            'Domain': 'Azure Security'
         }
     ]
     

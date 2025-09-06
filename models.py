@@ -149,6 +149,12 @@ class AnswerOption(db.Model):
     is_correct = db.Column(db.Boolean, default=False)
     option_order = db.Column(db.Integer, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Performance indexes for faster lookups
+    __table_args__ = (
+        db.Index('idx_answer_option_question', 'question_id'),
+        db.Index('idx_answer_option_question_correct', 'question_id', 'is_correct'),
+    )
 
 class UserPurchase(db.Model):
     __tablename__ = 'user_purchases'
@@ -206,6 +212,13 @@ class UserAnswer(db.Model):
     selected_option_id = db.Column(db.Integer, db.ForeignKey('answer_options.id'), nullable=True)
     is_correct = db.Column(db.Boolean, nullable=False, default=False)
     answered_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Performance indexes for faster queries
+    __table_args__ = (
+        db.Index('idx_user_answer_test_question', 'test_attempt_id', 'question_id'),
+        db.Index('idx_user_answer_test_attempt', 'test_attempt_id'),
+        db.Index('idx_user_answer_question', 'question_id'),
+    )
     
     # Relationships
     selected_option = db.relationship('AnswerOption', lazy=True)
