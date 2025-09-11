@@ -6,6 +6,11 @@ Database migration script to add new columns for OTP email system
 import os
 import sys
 from sqlalchemy import text
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
 from app import app, db
 
 def migrate_database():
@@ -42,13 +47,13 @@ def migrate_database():
             otp_table_sql = """
             CREATE TABLE IF NOT EXISTS otp_tokens (
                 id SERIAL PRIMARY KEY,
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                token VARCHAR(6) NOT NULL,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                email VARCHAR(120) NOT NULL,
+                token VARCHAR(10) NOT NULL,
                 purpose VARCHAR(20) NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 expires_at TIMESTAMP NOT NULL,
                 is_used BOOLEAN DEFAULT FALSE,
-                attempts INTEGER DEFAULT 0,
                 ip_address VARCHAR(45)
             );
             """
@@ -58,6 +63,22 @@ def migrate_database():
                 print("✅ Created otp_tokens table")
             except Exception as e:
                 print(f"⚠️  OTP tokens table already exists or error: {e}")
+
+            # Add missing email column to existing otp_tokens table
+            otp_migrations = [
+                "ALTER TABLE otp_tokens ADD COLUMN IF NOT EXISTS email VARCHAR(120);",
+                "ALTER TABLE otp_tokens ALTER COLUMN user_id DROP NOT NULL;",
+                "ALTER TABLE otp_tokens ALTER COLUMN token TYPE VARCHAR(10);",
+                "UPDATE otp_tokens SET email = users.email FROM users WHERE otp_tokens.user_id = users.id AND otp_tokens.email IS NULL;",
+                "ALTER TABLE otp_tokens ALTER COLUMN email SET NOT NULL;"
+            ]
+
+            for migration in otp_migrations:
+                try:
+                    connection.execute(text(migration))
+                    print(f"✅ OTP Migration: {migration}")
+                except Exception as e:
+                    print(f"⚠️  OTP Migration already applied or error: {migration} - {e}")
 
             # Create index on otp_tokens
             index_sql = "CREATE INDEX IF NOT EXISTS idx_otp_tokens_token ON otp_tokens(token);"
