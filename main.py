@@ -65,7 +65,7 @@ if __name__ == '__main__':
     print("")
     
     try:
-        app.run(host='0.0.0.0', port=5000, debug=debug_mode)
+        app.run(host='0.0.0.0', port=8000, debug=debug_mode)
     except KeyboardInterrupt:
         print("\n👋 Server stopped by user")
     except Exception as e:
