@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/bin/bash 
+chmod +x startup.sh
 
 # startup.sh - Azure App Service startup script for PrepMyCert
 # This script is executed when the Azure App Service container starts
