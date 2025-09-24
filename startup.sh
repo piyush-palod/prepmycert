@@ -56,14 +56,9 @@ if retry_count == max_retries:
     exit(1)
 "
 
-# Run database migrations
-echo "🗄️  Running database migrations..."
-if python3 migrate_database.py; then
-    echo "✅ Database migrations completed successfully"
-else
-    echo "❌ Database migrations failed"
-    exit 1
-fi
+# Database tables will be auto-created by Flask on first request
+echo "🗄️  Database setup will be handled automatically by Flask..."
+echo "✅ Skipping migration script - using Flask auto-creation"
 
 # Create admin user if specified
 if [ ! -z "$ADMIN_EMAIL" ] && [ ! -z "$ADMIN_PASSWORD" ]; then
